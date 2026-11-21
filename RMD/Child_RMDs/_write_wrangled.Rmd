@@ -1,0 +1,23 @@
+---
+title: "Write wrangled"
+author: "Matthew Hamilton"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+We can now save our processed data.
+
+```{r}
+write_new_dirs(paste0(path_to_output_1L_chr,"/R"),
+                       consent_1L_chr = "Y")
+```
+
+We save a copy of our processed dataset.
+
+```{r message=FALSE}
+saveRDS(processed_tb, 
+        paste0(path_to_output_1L_chr,"/",
+               "/R/processed_tb.RDS"))
+```
+

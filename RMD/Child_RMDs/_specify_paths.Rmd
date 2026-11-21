@@ -1,0 +1,47 @@
+---
+title: "Specify paths"
+author: "Matthew Hamilton"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Specify paths to input data 
+We specify the directory from which we will retrieve input data.
+
+
+```{r eval=FALSE}
+path_to_input_1L_chr <- "ADD PATH HERE"
+```
+
+```{r echo=FALSE}
+path_to_input_1L_chr <- params$path_to_input_1L_chr
+```
+
+We also provide the names of the files within this directory that we wish to ingest.
+
+```{r eval=FALSE}
+file_names_ls <- list(extended = "ADD XLSX FILE NAME HERE",
+                      summary = "ADD XLSX FILE NAME HERE")
+```
+
+```{r echo=FALSE}
+file_names_ls <- params$file_names_ls
+```
+
+
+## Specify path to output data directory
+We specify the directory in which we will save all project outputs.
+
+```{r eval=FALSE}
+path_to_output_1L_chr <- "ADD PATH HERE"
+```
+
+```{r echo=FALSE}
+path_to_output_1L_chr <- params$path_to_output_1L_chr
+```
+
+We also provide the name of the sub-directory in which R objects (RDS format) will be saved.
+
+```{r}
+r_dir_1L_chr <- "R"
+```

@@ -1,0 +1,16 @@
+---
+title: "Ingest"
+author: "Matthew Hamilton"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r echo = FALSE}
+file_names_ls <- params$file_names_ls
+```
+
+```{r eval=is.null(file_names_ls), message=FALSE}
+raw_data_ls <- file_names_ls %>%
+  purrr::map2(sheet_names_ls,~readxl::read_xlsx(paste0(path_to_input_1L_chr,"/",.x),
+                                                sheet = .y))
+```

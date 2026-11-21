@@ -1,0 +1,157 @@
+---
+title: "Wrangle"
+author: "Matthew Hamilton"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Process and merge input dataset
+
+```{r}
+length(unique(raw_data_ls$summary$Paper_id))
+```
+
+```{r}
+nrow(raw_data_ls$summary)
+```
+
+```{r}
+# raw_data_ls$summary %>% dplyr::filter(dplyr::n()>1, .by = Paper_id)
+```
+
+```{r}
+processed_tb <- raw_data_ls$summary %>%
+  transform_to_split_cases(col = "Intervention description",
+                           split_pattern_col = "Comparison_nbr") 
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+  transform_to_split_cols(source_col = "Intervention description",
+                          before_col = "Category",
+                          after_col =  "Description") %>%
+  transform_to_permissible_values(source_col = "Category",
+                                  permissible_values_chr = c("Lifestyle therapy", "Multicomponent",
+                                                             "Neuromodulation", "Parenting",
+                                                             "Psychoeducation", "Psychotherapy", "Stepped care",
+                                                              "Support service",  "Training"),
+                                  original_value_col = "Old_Category",
+                                  multiple_matches_col = "ErrorFlag",
+                                  residual_value_col = "Subcategory") %>%
+  dplyr::mutate(Description = Description %>% stringr::str_remove_all("Lifestyle therapy \\(nutrition & physical activity\\) ") %>% stringr::str_to_sentence())
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+    transform_to_permissible_values(source_col = "Subcategory",
+                                  permissible_values_chr = c("Brief", "Carer", 
+                                                             "Combined individual-group", "Health care professional", 
+                                                             "Nutrition & physical activity", 
+                                                             "Online"),
+                                  original_value_col = "Old_Subcategory",
+                                  multiple_matches_col = "ErrorFlag2",
+                                  unmatched_action_chr = "set_na")
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+  transform_to_filtered_patterns(col = Category,
+                                 banned_patterns_chr = "Neuromodulation")
+```
+
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+  dplyr::filter(Quality == "H")
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+    transform_to_filtered_patterns(col = `Evaluation methods`,
+                                   allowable_patterns_chr = "CUA")
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+    transform_to_filtered_patterns(col = Perspective,
+                                   allowable_patterns_chr = c("Healthcare", "Payer"))
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+  dplyr::left_join(raw_data_ls$extended %>%
+                     dplyr::rename(Comparator_Ext = Comparator) %>%
+                     dplyr::select(c("paper_id", "Comparator_Ext", "Population extract", 
+                                     "Diagnosis", "Setting", "Setting_Category",           
+                                     "Results", "No. intervention evaluated")) %>%
+                     dplyr::rename(Paper_id = "paper_id")) %>%
+  dplyr::select(-tidyselect::all_of(c("Intervention description", "Year of pricing & Discounting", "Quality", 
+                                      "Old_Category", "ErrorFlag", "Old_Subcategory", "ErrorFlag2")))
+```
+```{r}
+processed_tb <- processed_tb %>%
+  transform_to_extract_split_segment(split_pattern_col = Comparison_nbr,
+                                     target_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
+                                     end_patterns_chr = "\r\n\r\n",
+                                     remainder_col = "Extra_CE_Results")
+```
+
+```{r}
+processed_tb <- processed_tb %>% dplyr::select(c( "Setting_Category", "Category", "Subcategory", "Description", "Population extract", 
+                                                  "Target population", "Diagnosis",  "Cost-effectiveness outcomes (in 2024 AUD)", "Extra_CE_Results", 
+                                                  "Results", "Costs",  "Outcomes", "Perspective", dplyr::everything() ))
+```
+
+```{r}
+processed_tb <- processed_tb %>% transform_to_permissible_values(source_col = Perspective, permissible_values_chr = c("Healthcare", "Payer", "Societal"), 
+                                                                 original_value_col = "OLD_Perspective", multiple_matches_col = "Multiple_Perspectives")
+```
+
+```{r}
+processed_tb <- processed_tb %>% 
+  transform_to_expand_multiple_matches(source_col = Perspective, multiple_matches_col = Multiple_Perspectives)
+```
+
+```{r}
+variants_ls <- list(Healthcare = c("Healthcare sector", "Healthcare sector perspective", "Health sector perspective"),
+                     Payer = c("Healthcare payer"), 
+                     Societal = c("Partial societal perspective", "Societal perspective", "Societal", "Sococietal")) 
+```
+
+
+```{r}
+# processed_tb <- processed_tb %>%
+#   transform_to_extract_split_segment(split_pattern_col = Comparison_nbr,
+#                                      target_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
+#                                      end_patterns_chr = "\r\n\r\n",
+#                                      remainder_col = "Extra_CE_Results")
+```
+
+
+```{r}
+ processed_tb$`Delivery settings` %>% unique()
+```
+
+```{r}
+ processed_tb$`Cost-effectiveness outcomes (in 2024 AUD)` 
+```
+
