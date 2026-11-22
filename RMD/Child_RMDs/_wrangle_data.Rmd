@@ -16,11 +16,283 @@ nrow(raw_data_ls$summary)
 ```
 
 ```{r}
-# raw_data_ls$summary %>% dplyr::filter(dplyr::n()>1, .by = Paper_id)
+nrow(raw_data_ls$extended)
 ```
 
 ```{r}
 processed_tb <- raw_data_ls$summary %>%
+  dplyr::left_join(raw_data_ls$extended %>%
+                     dplyr::rename(Comparator_Ext = Comparator) %>%
+                     dplyr::select(c("paper_id", "Comparator_Ext", "Population extract",
+                                     "Diagnosis", "Setting", "Setting_Category",
+                                     "Results", "No. intervention evaluated")) %>%
+                     dplyr::rename(Paper_id = "paper_id"))
+
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+  dplyr::filter(Quality == "H")
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+    transform_to_filtered_patterns(col = `Evaluation methods`,
+                                   allowable_patterns_chr = "CUA")
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+  dplyr::mutate(
+    CE_Results_Raw = `Cost-effectiveness outcomes (in 2024 AUD)`
+  )
+```
+
+```{r}
+test_tb <- processed_tb %>%
+
+  transform_to_expand_numbered_items(
+
+    source_col =
+      `Cost-effectiveness outcomes (in 2024 AUD)`,
+
+    item_nbr_col =
+      "CE_Item_Nbr",
+
+    item_seq_col =
+      "CE_Item_Seq",
+
+    item_text_col =
+      "CE_Item_Text",
+
+    pre_item_text_col =
+      "CE_Pre_Item_Text",
+
+    post_item_text_col =
+      "CE_Post_Item_Text",
+
+    original_text_col =
+      "CE_Raw"
+
+  )
+```
+
+
+```{r}
+ce_perspectives_ls <- list(
+
+  Healthcare = c(
+
+    "Healthcare perspective:",
+    "Healthcare sector perspective:",
+    "Healthcare sector:",
+    "Health sector perspective:",
+    "Health sector:",
+    "Health-care perspective:",
+    "Healthcare:"
+
+  ),
+
+  Payer = c(
+
+    "Healthcare payer:",
+    "Health-care payer:",
+    "Australian Government (third-party payer of healthcare services)"
+
+  ),
+
+  Societal = c(
+
+    "Partial societal perspective:",
+    "Societal perspective:",
+    "Partial societal:",
+    "Societal:",
+    "Sococietal:"
+
+  )
+
+)
+```
+
+```{r}
+test_tb <- test_tb %>%
+
+  transform_to_extract_ce_perspective(
+
+    source_col =
+      CE_Item_Text,
+
+    variants_ls =
+      ce_perspectives_ls,
+
+    perspective_col =
+      "Perspective",
+
+    original_text_col =
+      "CE_Item_Text_Original",
+
+    matched_pattern_col =
+      "Matched_Perspective"
+
+  )
+```
+
+
+```{r}
+test_tb <- test_tb %>%
+  transform_to_extract_trailing_text(source_col = CE_Item_Text,
+                                     trailing_text_col = "CE_Trailing_Text",
+                                     section_patterns_chr = c("Incremental NMB:",
+                                                              "ICER - "))
+```
+
+
+```{r}
+test_tb <- test_tb %>%
+  dplyr::mutate(
+    Has_Secondary_Block =
+      !is.na(
+        CE_Trailing_Text
+      )
+  )
+```
+
+```{r}
+test_tb <- test_tb %>%
+  dplyr::mutate(
+    Has_Secondary_Block =
+      !is.na(
+        CE_Trailing_Text
+      )
+  )
+```
+
+
+```{r}
+test_tb <- test_tb %>%
+
+  transform_to_expand_unnumbered_perspectives(
+
+    source_col =
+      CE_Item_Text,
+
+    variants_ls =
+      ce_perspectives_ls
+
+  )
+```
+
+
+```{r}
+statistic_patterns_ls <- list(
+
+  ICER = c(
+    "ICER =",
+    "ICER:",
+    "ICER - "
+  ),
+
+  INMB = c(
+    "INMB"
+  ),
+
+  NMB = c(
+    "Incremental NMB:",
+    "NMB ="
+  ),
+
+  ROI = c(
+    "ROI:"
+  )
+
+)
+
+test_tb <- test_tb %>%
+
+  transform_to_expand_ce_statistics(
+
+    source_col =
+      CE_Item_Text,
+
+    statistic_patterns_ls =
+      statistic_patterns_ls,
+
+    statistic_col =
+      "Statistic_Type",
+
+    statistic_text_col =
+      "Statistic_Text",
+
+    original_text_col =
+      "Statistic_Source"
+
+  )
+```
+
+
+
+
+
+
+```{r}
+ test_tb %>%
+dplyr::filter(
+Paper_id %in% c(
+  "432",
+  "435",
+  "511",
+  "551"
+)
+) %>%
+dplyr::select(
+Paper_id,
+CE_Item_Nbr,
+CE_Item_Text,
+CE_Trailing_Text
+)
+```
+
+
+```{r}
+# processed_tb <- processed_tb %>%
+# 
+#   transform_to_expand_ce_perspectives(
+# 
+#     source_col =
+#       `Cost-effectiveness outcomes (in 2024 AUD)`,
+# 
+#     variants_ls =
+#       ce_perspectives_ls,
+# 
+#     perspective_text_col =
+#       "CE_Perspective_Text",
+# 
+#     original_text_col =
+#       "CE_Results_Original",
+# 
+#     matched_pattern_col =
+#       "Matched_Perspective_Pattern"
+# 
+#   )
+```
+
+
+#################
+
+```{r}
+# raw_data_ls$summary %>% dplyr::filter(dplyr::n()>1, .by = Paper_id)
+```
+
+```{r}
+processed_tb <- processed_tb %>%
   transform_to_split_cases(col = "Intervention description",
                            split_pattern_col = "Comparison_nbr") 
 ```
@@ -28,6 +300,69 @@ processed_tb <- raw_data_ls$summary %>%
 ```{r}
 nrow(processed_tb)
 ```
+
+
+```{r}
+processed_tb <- processed_tb %>% transform_to_permissible_values(source_col = Perspective, permissible_values_chr = c("Healthcare", "Payer", "Societal"), 
+                                                                 original_value_col = "OLD_Perspective", multiple_matches_col = "Multiple_Perspectives")
+```
+
+```{r}
+processed_tb <- processed_tb %>% 
+  transform_to_expand_multiple_matches(source_col = Perspective, multiple_matches_col = Multiple_Perspectives)
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+# c("ICERs - $ per PSP point & QALY lost ", "Cost per additional case ", ") with 95%", "Incremental NMB: ", "Incremental NMB:", "INMB −"[Not yet] ", INMB "[Not yet] " )
+```
+
+
+```{r}
+processed_tb <- processed_tb %>% 
+  transform_to_clean_text(source_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
+                          original_value_col ="Copy_1_Of_CE_Results",   
+                          keep_after_patterns_chr = c(":", 
+                                                      "ICER - $ per QALY gained  " # Bad idea???
+                                                      ),
+                          except_if_contains_patterns_chr = c("Healthcare perspective:" ),
+                          remove_trailing_patterns_chr = NULL)
+```
+
+
+```{r}
+variants_ls <- list(Healthcare = c("Healthcare sector", "Healthcare sector perspective", "Health sector perspective", "Healthcare perspective"),
+                     Payer = c("Healthcare payer"), 
+                     Societal = c("Partial societal perspective", "Societal perspective", "Societal", "Sococietal")) 
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+  transform_to_extract_variant_segment(source_col = Perspective,
+    text_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
+    original_text_col = "Copy_2_Of_CE_Results",
+    multiple_matches_col = Multiple_Perspectives,
+    variants_ls = variants_ls,
+    delimiter_chr = ":",
+    end_patterns_chr = c(" across all perspectives ",
+                         " Both have 94"),
+    remainder_col = "Extra_CE_Results_2",
+    debug_lgl = T) %>% 
+  transform_to_clean_text(source_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
+                          remove_trailing_patterns_chr = c(" (2)", " (3)"))
+```
+
+
+```{r}
+# test_tb %>% dplyr::select(Paper_id, 
+#                           Comparison_nbr,
+#                           `Intervention description`,
+#                           # Description,
+#                           Copy_1_Of_CE_Results, Copy_2_Of_CE_Results,`Cost-effectiveness outcomes (in 2024 AUD)`, Perspective, Multiple_Perspectives,dplyr::everything()) -> test_tb
+```
+
 
 ```{r}
 processed_tb <- processed_tb %>%
@@ -69,23 +404,7 @@ processed_tb <- processed_tb %>%
 ```{r}
 nrow(processed_tb)
 ```
-```{r}
-processed_tb <- processed_tb %>%
-  dplyr::filter(Quality == "H")
-```
 
-```{r}
-nrow(processed_tb)
-```
-```{r}
-processed_tb <- processed_tb %>%
-    transform_to_filtered_patterns(col = `Evaluation methods`,
-                                   allowable_patterns_chr = "CUA")
-```
-
-```{r}
-nrow(processed_tb)
-```
 
 ```{r}
 processed_tb <- processed_tb %>%
@@ -98,13 +417,13 @@ nrow(processed_tb)
 ```
 ```{r}
 processed_tb <- processed_tb %>%
-  dplyr::left_join(raw_data_ls$extended %>%
-                     dplyr::rename(Comparator_Ext = Comparator) %>%
-                     dplyr::select(c("paper_id", "Comparator_Ext", "Population extract", 
-                                     "Diagnosis", "Setting", "Setting_Category",           
-                                     "Results", "No. intervention evaluated")) %>%
-                     dplyr::rename(Paper_id = "paper_id")) %>%
-  dplyr::select(-tidyselect::all_of(c("Intervention description", "Year of pricing & Discounting", "Quality", 
+  # dplyr::left_join(raw_data_ls$extended %>%
+  #                    dplyr::rename(Comparator_Ext = Comparator) %>%
+  #                    dplyr::select(c("paper_id", "Comparator_Ext", "Population extract",
+  #                                    "Diagnosis", "Setting", "Setting_Category",
+  #                                    "Results", "No. intervention evaluated")) %>%
+  #                    dplyr::rename(Paper_id = "paper_id")) %>%
+  dplyr::select(-tidyselect::all_of(c("Intervention description", "Year of pricing & Discounting", "Quality",
                                       "Old_Category", "ErrorFlag", "Old_Subcategory", "ErrorFlag2")))
 ```
 ```{r}
@@ -121,30 +440,6 @@ processed_tb <- processed_tb %>% dplyr::select(c( "Setting_Category", "Category"
                                                   "Results", "Costs",  "Outcomes", "Perspective", dplyr::everything() ))
 ```
 
-```{r}
-processed_tb <- processed_tb %>% transform_to_permissible_values(source_col = Perspective, permissible_values_chr = c("Healthcare", "Payer", "Societal"), 
-                                                                 original_value_col = "OLD_Perspective", multiple_matches_col = "Multiple_Perspectives")
-```
-
-```{r}
-processed_tb <- processed_tb %>% 
-  transform_to_expand_multiple_matches(source_col = Perspective, multiple_matches_col = Multiple_Perspectives)
-```
-
-```{r}
-variants_ls <- list(Healthcare = c("Healthcare sector", "Healthcare sector perspective", "Health sector perspective"),
-                     Payer = c("Healthcare payer"), 
-                     Societal = c("Partial societal perspective", "Societal perspective", "Societal", "Sococietal")) 
-```
-
-
-```{r}
-# processed_tb <- processed_tb %>%
-#   transform_to_extract_split_segment(split_pattern_col = Comparison_nbr,
-#                                      target_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
-#                                      end_patterns_chr = "\r\n\r\n",
-#                                      remainder_col = "Extra_CE_Results")
-```
 
 
 ```{r}
