@@ -57,7 +57,7 @@ processed_tb <- processed_tb %>%
 ```
 
 ```{r}
-test_tb <- processed_tb %>%
+processed_tb <- processed_tb %>%
 
   transform_to_expand_numbered_items(
 
@@ -123,7 +123,7 @@ ce_perspectives_ls <- list(
 ```
 
 ```{r}
-test_tb <- test_tb %>%
+processed_tb <- processed_tb  %>%
 
   transform_to_extract_ce_perspective(
 
@@ -145,18 +145,24 @@ test_tb <- test_tb %>%
   )
 ```
 
+```{r}
+nrow(processed_tb)
+```
 
 ```{r}
-test_tb <- test_tb %>%
+processed_tb <- processed_tb  %>%
   transform_to_extract_trailing_text(source_col = CE_Item_Text,
                                      trailing_text_col = "CE_Trailing_Text",
                                      section_patterns_chr = c("Incremental NMB:",
                                                               "ICER - "))
 ```
 
+```{r}
+nrow(processed_tb)
+```
 
 ```{r}
-test_tb <- test_tb %>%
+processed_tb <- processed_tb  %>%
   dplyr::mutate(
     Has_Secondary_Block =
       !is.na(
@@ -166,7 +172,7 @@ test_tb <- test_tb %>%
 ```
 
 ```{r}
-test_tb <- test_tb %>%
+processed_tb <- processed_tb  %>%
   dplyr::mutate(
     Has_Secondary_Block =
       !is.na(
@@ -177,7 +183,7 @@ test_tb <- test_tb %>%
 
 
 ```{r}
-test_tb <- test_tb %>%
+processed_tb <- processed_tb  %>%
 
   transform_to_expand_unnumbered_perspectives(
 
@@ -190,6 +196,9 @@ test_tb <- test_tb %>%
   )
 ```
 
+```{r}
+nrow(processed_tb)
+```
 
 ```{r}
 statistic_patterns_ls <- list(
@@ -215,7 +224,11 @@ statistic_patterns_ls <- list(
 
 )
 
-test_tb <- test_tb %>%
+
+```
+
+```{r}
+processed_tb <- processed_tb  %>%
 
   transform_to_expand_ce_statistics(
 
@@ -238,26 +251,379 @@ test_tb <- test_tb %>%
 ```
 
 
-
+```{r}
+nrow(processed_tb)
+```
 
 
 
 ```{r}
- test_tb %>%
-dplyr::filter(
-Paper_id %in% c(
-  "432",
-  "435",
-  "511",
-  "551"
+result_dimension_patterns_ls <- list(
+
+  QALY = c(
+    "qaly gained",
+    "qaly lost"
+  ),
+
+  DALY = c(
+    "daly averted"
+  ),
+
+  K10 = c(
+    "point decreased on k10",
+    "k10"
+  ),
+
+  MADRS = c(
+    "madrs point"
+  ),
+
+  PSP = c(
+    "psp point"
+  ),
+
+  RELAPSE = c(
+    "relapse case avoided"
+  ),
+
+  MDE_DAY = c(
+    "mde day averted"
+  )
+
 )
-) %>%
-dplyr::select(
-Paper_id,
-CE_Item_Nbr,
-CE_Item_Text,
-CE_Trailing_Text
-)
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_result_dimensions(
+
+    source_cols = list(
+
+      rlang::sym(
+        "CE_Pre_Item_Text"
+      ),
+
+      rlang::sym(
+        "Statistic_Text"
+      ),
+
+      rlang::sym(
+        "Outcomes"
+      )
+
+    ),
+
+    result_dimension_patterns_ls =
+      result_dimension_patterns_ls,
+
+    output_col =
+      "Result_Dimensions"
+
+  )
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_expand_result_dimensions(
+
+    source_col =
+      Result_Dimensions,
+
+    output_col =
+      "Result_Dimension"
+
+  )
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    Multi_Dimension_Result =
+
+      Result_Dimensions %in%
+
+      c(
+        "QALY; DALY",
+        "QALY; PSP",
+        "QALY; RELAPSE",
+        "DALY; MDE_DAY"
+      )
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_dimension_text(
+
+    source_col =
+      Statistic_Text,
+
+    dimension_col =
+      "Result_Dimension",
+
+    output_col =
+      "Dimension_Text"
+
+  )
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_fill_statistic_type()
+```
+
+```{r}
+processed_tb %>%
+
+  dplyr::count(
+    Statistic_Type,
+    Result_Dimension,
+    sort = TRUE
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    Result_Dimension =
+
+      dplyr::case_when(
+
+        Statistic_Type == "ROI" ~
+
+          NA_character_,
+
+        TRUE ~
+
+          Result_Dimension
+
+      )
+
+  )
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_result_status(
+
+    source_col =
+      Dimension_Text,
+
+    output_col =
+      "Result_Status"
+
+  )
+```
+
+```{r}
+nrow(processed_tb)
+```
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_point_estimate_text(
+
+    source_col =
+      Dimension_Text,
+
+    output_col =
+      "Point_Estimate_Text"
+
+  )
+```
+
+
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_result_value(
+
+    source_col =
+      Dimension_Text,
+
+    status_col =
+      Result_Status,
+
+    output_col =
+      "Result_Value"
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    Has_Multiple_Horizons =
+
+      Paper_id %in%
+
+      c(
+        "551",
+        "435",
+        "431"
+      )
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_ci_text(
+
+    source_col =
+      Dimension_Text
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_result_status(
+
+    source_col =
+      Point_Estimate_Text,
+
+    output_col =
+      "Result_Status"
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_result_value(
+
+    source_col =
+      Point_Estimate_Text,
+
+    status_col =
+      Result_Status,
+
+    output_col =
+      "Result_Value",
+
+    scale_col =
+      "Result_Value_Scale"
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    Result_Value_Adjusted =
+
+      dplyr::case_when(
+
+        Result_Value_Scale == "million" ~
+
+          Result_Value * 1e6,
+
+        TRUE ~
+
+          Result_Value
+
+      )
+
+  )
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_ci_values()
+```
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    CI_Lower_Value_Adjusted =
+
+      dplyr::case_when(
+
+        CI_Lower_Value_Scale == "million" ~
+
+          CI_Lower_Value * 1e6,
+
+        TRUE ~
+
+          CI_Lower_Value
+
+      ),
+
+    CI_Upper_Value_Adjusted =
+
+      dplyr::case_when(
+
+        CI_Upper_Value_Scale == "million" ~
+
+          CI_Upper_Value * 1e6,
+
+        TRUE ~
+
+          CI_Upper_Value
+
+      )
+
+  )
+```
+
+
+
+```{r}
+# processed_tb <- processed_tb %>%
+# 
+#   transform_to_expand_horizons(
+# 
+#     source_col =
+#       Dimension_Text
+# 
+#   )
+```
+
+```{r}
+nrow(processed_tb)
+```
+
+###################
+
+
+
+```{r}
+
 ```
 
 
@@ -286,167 +652,3 @@ CE_Trailing_Text
 
 
 #################
-
-```{r}
-# raw_data_ls$summary %>% dplyr::filter(dplyr::n()>1, .by = Paper_id)
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-  transform_to_split_cases(col = "Intervention description",
-                           split_pattern_col = "Comparison_nbr") 
-```
-
-```{r}
-nrow(processed_tb)
-```
-
-
-```{r}
-processed_tb <- processed_tb %>% transform_to_permissible_values(source_col = Perspective, permissible_values_chr = c("Healthcare", "Payer", "Societal"), 
-                                                                 original_value_col = "OLD_Perspective", multiple_matches_col = "Multiple_Perspectives")
-```
-
-```{r}
-processed_tb <- processed_tb %>% 
-  transform_to_expand_multiple_matches(source_col = Perspective, multiple_matches_col = Multiple_Perspectives)
-```
-
-```{r}
-nrow(processed_tb)
-```
-```{r}
-# c("ICERs - $ per PSP point & QALY lost ", "Cost per additional case ", ") with 95%", "Incremental NMB: ", "Incremental NMB:", "INMB −"[Not yet] ", INMB "[Not yet] " )
-```
-
-
-```{r}
-processed_tb <- processed_tb %>% 
-  transform_to_clean_text(source_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
-                          original_value_col ="Copy_1_Of_CE_Results",   
-                          keep_after_patterns_chr = c(":", 
-                                                      "ICER - $ per QALY gained  " # Bad idea???
-                                                      ),
-                          except_if_contains_patterns_chr = c("Healthcare perspective:" ),
-                          remove_trailing_patterns_chr = NULL)
-```
-
-
-```{r}
-variants_ls <- list(Healthcare = c("Healthcare sector", "Healthcare sector perspective", "Health sector perspective", "Healthcare perspective"),
-                     Payer = c("Healthcare payer"), 
-                     Societal = c("Partial societal perspective", "Societal perspective", "Societal", "Sococietal")) 
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-  transform_to_extract_variant_segment(source_col = Perspective,
-    text_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
-    original_text_col = "Copy_2_Of_CE_Results",
-    multiple_matches_col = Multiple_Perspectives,
-    variants_ls = variants_ls,
-    delimiter_chr = ":",
-    end_patterns_chr = c(" across all perspectives ",
-                         " Both have 94"),
-    remainder_col = "Extra_CE_Results_2",
-    debug_lgl = T) %>% 
-  transform_to_clean_text(source_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
-                          remove_trailing_patterns_chr = c(" (2)", " (3)"))
-```
-
-
-```{r}
-# test_tb %>% dplyr::select(Paper_id, 
-#                           Comparison_nbr,
-#                           `Intervention description`,
-#                           # Description,
-#                           Copy_1_Of_CE_Results, Copy_2_Of_CE_Results,`Cost-effectiveness outcomes (in 2024 AUD)`, Perspective, Multiple_Perspectives,dplyr::everything()) -> test_tb
-```
-
-
-```{r}
-processed_tb <- processed_tb %>%
-  transform_to_split_cols(source_col = "Intervention description",
-                          before_col = "Category",
-                          after_col =  "Description") %>%
-  transform_to_permissible_values(source_col = "Category",
-                                  permissible_values_chr = c("Lifestyle therapy", "Multicomponent",
-                                                             "Neuromodulation", "Parenting",
-                                                             "Psychoeducation", "Psychotherapy", "Stepped care",
-                                                              "Support service",  "Training"),
-                                  original_value_col = "Old_Category",
-                                  multiple_matches_col = "ErrorFlag",
-                                  residual_value_col = "Subcategory") %>%
-  dplyr::mutate(Description = Description %>% stringr::str_remove_all("Lifestyle therapy \\(nutrition & physical activity\\) ") %>% stringr::str_to_sentence())
-```
-
-
-```{r}
-processed_tb <- processed_tb %>%
-    transform_to_permissible_values(source_col = "Subcategory",
-                                  permissible_values_chr = c("Brief", "Carer", 
-                                                             "Combined individual-group", "Health care professional", 
-                                                             "Nutrition & physical activity", 
-                                                             "Online"),
-                                  original_value_col = "Old_Subcategory",
-                                  multiple_matches_col = "ErrorFlag2",
-                                  unmatched_action_chr = "set_na")
-```
-
-
-```{r}
-processed_tb <- processed_tb %>%
-  transform_to_filtered_patterns(col = Category,
-                                 banned_patterns_chr = "Neuromodulation")
-```
-
-
-```{r}
-nrow(processed_tb)
-```
-
-
-```{r}
-processed_tb <- processed_tb %>%
-    transform_to_filtered_patterns(col = Perspective,
-                                   allowable_patterns_chr = c("Healthcare", "Payer"))
-```
-
-```{r}
-nrow(processed_tb)
-```
-```{r}
-processed_tb <- processed_tb %>%
-  # dplyr::left_join(raw_data_ls$extended %>%
-  #                    dplyr::rename(Comparator_Ext = Comparator) %>%
-  #                    dplyr::select(c("paper_id", "Comparator_Ext", "Population extract",
-  #                                    "Diagnosis", "Setting", "Setting_Category",
-  #                                    "Results", "No. intervention evaluated")) %>%
-  #                    dplyr::rename(Paper_id = "paper_id")) %>%
-  dplyr::select(-tidyselect::all_of(c("Intervention description", "Year of pricing & Discounting", "Quality",
-                                      "Old_Category", "ErrorFlag", "Old_Subcategory", "ErrorFlag2")))
-```
-```{r}
-processed_tb <- processed_tb %>%
-  transform_to_extract_split_segment(split_pattern_col = Comparison_nbr,
-                                     target_col = `Cost-effectiveness outcomes (in 2024 AUD)`,
-                                     end_patterns_chr = "\r\n\r\n",
-                                     remainder_col = "Extra_CE_Results")
-```
-
-```{r}
-processed_tb <- processed_tb %>% dplyr::select(c( "Setting_Category", "Category", "Subcategory", "Description", "Population extract", 
-                                                  "Target population", "Diagnosis",  "Cost-effectiveness outcomes (in 2024 AUD)", "Extra_CE_Results", 
-                                                  "Results", "Costs",  "Outcomes", "Perspective", dplyr::everything() ))
-```
-
-
-
-```{r}
- processed_tb$`Delivery settings` %>% unique()
-```
-
-```{r}
- processed_tb$`Cost-effectiveness outcomes (in 2024 AUD)` 
-```
-

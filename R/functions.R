@@ -1405,6 +1405,304 @@ transform_to_expand_ce_statistics <- function(
     )
   
 }
+transform_to_expand_horizons <- function(
+    .data,
+    source_col,
+    horizon_patterns_chr = c(
+      "1-year",
+      "31-year",
+      "1 year",
+      "3-month",
+      "6mth",
+      "1yr"
+    ),
+    horizon_col = "Horizon_Label",
+    horizon_text_col = "Horizon_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  horizon_col <- rlang::sym(
+    horizon_col
+  )
+  
+  horizon_text_col <- rlang::sym(
+    horizon_text_col
+  )
+  
+  extract_horizons <- function(
+    text_chr,
+    horizon_patterns_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Horizon_Label =
+            NA_character_,
+          
+          Horizon_Text =
+            text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    detected_chr <-
+      
+      horizon_patterns_chr[
+        
+        purrr::map_lgl(
+          
+          horizon_patterns_chr,
+          
+          ~ stringr::str_detect(
+            
+            text_chr,
+            
+            stringr::fixed(
+              .x,
+              ignore_case = TRUE
+            )
+            
+          )
+          
+        )
+        
+      ]
+    
+    if (
+      length(
+        detected_chr
+      ) <= 1
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Horizon_Label =
+            detected_chr %||%
+            NA_character_,
+          
+          Horizon_Text =
+            text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    starts_int <-
+      
+      purrr::map_int(
+        
+        detected_chr,
+        
+        function(pattern_chr) {
+          
+          stringr::str_locate(
+            
+            stringr::str_to_lower(
+              text_chr
+            ),
+            
+            stringr::fixed(
+              stringr::str_to_lower(
+                pattern_chr
+              )
+            )
+            
+          )[1]
+          
+        }
+        
+      )
+    
+    ord_int <-
+      
+      order(
+        starts_int
+      )
+    
+    detected_chr <-
+      
+      detected_chr[
+        ord_int
+      ]
+    
+    starts_int <-
+      
+      starts_int[
+        ord_int
+      ]
+    
+    out_ls <- vector(
+      "list",
+      length(
+        detected_chr
+      )
+    )
+    
+    for (
+      i in seq_along(
+        detected_chr
+      )
+    ) {
+      
+      start_pos <-
+        
+        starts_int[i]
+      
+      end_pos <-
+        
+        if (
+          i <
+          length(
+            starts_int
+          )
+        ) {
+          
+          starts_int[
+            i + 1
+          ] - 1
+          
+        } else {
+          
+          nchar(
+            text_chr
+          )
+          
+        }
+      
+      segment_chr <-
+        
+        substr(
+          
+          text_chr,
+          
+          start_pos,
+          
+          end_pos
+          
+        )
+      
+      prefix_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "^[^:]+:"
+          
+        )
+      
+      if (
+        
+        !is.na(
+          prefix_chr
+        ) &&
+        
+        !stringr::str_starts(
+          
+          stringr::str_trim(
+            segment_chr
+          ),
+          
+          stringr::fixed(
+            prefix_chr
+          )
+          
+        )
+        
+      ) {
+        
+        segment_chr <-
+          
+          paste(
+            
+            prefix_chr,
+            
+            stringr::str_trim(
+              segment_chr
+            )
+            
+          )
+        
+      }
+      
+      out_ls[[i]] <-
+        
+        tibble::tibble(
+          
+          Horizon_Label =
+            detected_chr[i],
+          
+          Horizon_Text =
+            
+            stringr::str_squish(
+              segment_chr
+            )
+          
+        )
+      
+    }
+    
+    dplyr::bind_rows(
+      out_ls
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      .horizon_ls = list(
+        
+        extract_horizons(
+          
+          text_chr =
+            as.character(
+              !!source_col
+            ),
+          
+          horizon_patterns_chr =
+            horizon_patterns_chr
+          
+        )
+        
+      )
+      
+    ) %>%
+    
+    tidyr::unnest(
+      .horizon_ls
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::rename(
+      
+      !!horizon_col :=
+        Horizon_Label,
+      
+      !!horizon_text_col :=
+        Horizon_Text
+      
+    )
+  
+}
 transform_to_expand_multiple_matches <- function(
     .data,
     source_col,
@@ -1864,6 +2162,58 @@ transform_to_expand_numbered_items <- function(
         )
       )
       
+    )
+  
+}
+transform_to_expand_result_dimensions <- function(
+    .data,
+    source_col = Result_Dimensions,
+    output_col = "Result_Dimension") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      .dimension_ls =
+        
+        stringr::str_split(
+          
+          as.character(
+            !!source_col
+          ),
+          
+          pattern =
+            "\\s*;\\s*"
+          
+        )
+      
+    ) %>%
+    
+    tidyr::unnest(
+      .dimension_ls
+    ) %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        dplyr::na_if(
+          .dimension_ls,
+          "NA"
+        )
+      
+    ) %>%
+    
+    dplyr::select(
+      -.dimension_ls
     )
   
 }
@@ -2441,6 +2791,1748 @@ transform_to_extract_ce_perspective <- function(
     )
   
 }
+transform_to_extract_ci_text <- function(
+    .data,
+    source_col,
+    lower_col = "CI_Lower_Text",
+    upper_col = "CI_Upper_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  lower_col <- rlang::sym(
+    lower_col
+  )
+  
+  upper_col <- rlang::sym(
+    upper_col
+  )
+  
+  extract_ci <- function(
+    text_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        
+        list(
+          
+          lower =
+            NA_character_,
+          
+          upper =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    ci_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        stringr::regex(
+          
+          "\\((95\\s*%?\\s*(CI|UI).*?)\\)",
+          
+          ignore_case = TRUE
+          
+        )
+        
+      )
+    
+    if (
+      is.na(ci_chr)
+    ) {
+      
+      return(
+        
+        list(
+          
+          lower =
+            NA_character_,
+          
+          upper =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    ci_chr <-
+      
+      stringr::str_remove_all(
+        ci_chr,
+        "^\\(|\\)$"
+      )
+    
+    ci_chr <-
+      
+      stringr::str_remove(
+        
+        ci_chr,
+        
+        stringr::regex(
+          "^95\\s*%?\\s*(CI|UI)\\s*:?\\s*",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    bounds_chr <-
+      
+      stringr::str_split(
+        
+        ci_chr,
+        
+        stringr::regex(
+          "\\s+to\\s+",
+          ignore_case = TRUE
+        )
+        
+      )[[1]]
+    
+    if (
+      length(
+        bounds_chr
+      ) != 2
+    ) {
+      
+      return(
+        
+        list(
+          
+          lower =
+            NA_character_,
+          
+          upper =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    list(
+      
+      lower =
+        
+        stringr::str_squish(
+          bounds_chr[1]
+        ),
+      
+      upper =
+        
+        stringr::str_squish(
+          bounds_chr[2]
+        )
+      
+    )
+    
+  }
+  
+  ci_ls <-
+    
+    purrr::map(
+      
+      dplyr::pull(
+        .data,
+        !!source_col
+      ),
+      
+      extract_ci
+      
+    )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!lower_col :=
+        
+        purrr::map_chr(
+          ci_ls,
+          "lower"
+        ),
+      
+      !!upper_col :=
+        
+        purrr::map_chr(
+          ci_ls,
+          "upper"
+        )
+      
+    )
+  
+}
+
+transform_to_extract_ci_values <- function(
+    .data,
+    lower_text_col = "CI_Lower_Text",
+    upper_text_col = "CI_Upper_Text") {
+  
+  lower_text_col <- rlang::ensym(
+    lower_text_col
+  )
+  
+  upper_text_col <- rlang::ensym(
+    upper_text_col
+  )
+  
+  classify_ci <- function(
+    text_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        list(
+          status = NA_character_,
+          value = NA_real_,
+          scale = NA_character_
+        )
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_squish(
+        text_chr
+      )
+    
+    text_lower_chr <-
+      
+      stringr::str_to_lower(
+        text_chr
+      )
+    
+    if (
+      
+      stringr::str_detect(
+        text_lower_chr,
+        "\\bdominated\\b"
+      )
+      
+    ) {
+      
+      return(
+        
+        list(
+          
+          status =
+            "Dominated",
+          
+          value =
+            NA_real_,
+          
+          scale =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    if (
+      
+      stringr::str_detect(
+        text_lower_chr,
+        "\\bdominant\\b"
+      )
+      
+    ) {
+      
+      return(
+        
+        list(
+          
+          status =
+            "Dominant",
+          
+          value =
+            NA_real_,
+          
+          scale =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    scale_chr <-
+      
+      if (
+        
+        stringr::str_detect(
+          
+          text_lower_chr,
+          
+          "million"
+          
+        )
+        
+      ) {
+        
+        "million"
+        
+      } else {
+        
+        NA_character_
+        
+      }
+    
+    dollar_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[-−]?\\$\\s*[0-9,]+(?:\\.[0-9]+)?"
+        
+      )
+    
+    if (
+      
+      !is.na(
+        dollar_chr
+      )
+      
+    ) {
+      
+      value_chr <-
+        
+        stringr::str_remove_all(
+          dollar_chr,
+          "\\$|,"
+        )
+      
+      value_chr <-
+        
+        chartr(
+          "−",
+          "-",
+          value_chr
+        )
+      
+      return(
+        
+        list(
+          
+          status =
+            "Numeric",
+          
+          value =
+            
+            suppressWarnings(
+              as.numeric(
+                value_chr
+              )
+            ),
+          
+          scale =
+            scale_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    number_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[-−]?[0-9,]+(?:\\.[0-9]+)?"
+        
+      )
+    
+    if (
+      
+      !is.na(
+        number_chr
+      )
+      
+    ) {
+      
+      number_chr <-
+        
+        stringr::str_remove_all(
+          number_chr,
+          ","
+        )
+      
+      number_chr <-
+        
+        chartr(
+          "−",
+          "-",
+          number_chr
+        )
+      
+      return(
+        
+        list(
+          
+          status =
+            "Numeric",
+          
+          value =
+            
+            suppressWarnings(
+              as.numeric(
+                number_chr
+              )
+            ),
+          
+          scale =
+            scale_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    list(
+      
+      status =
+        "Unknown",
+      
+      value =
+        NA_real_,
+      
+      scale =
+        scale_chr
+      
+    )
+    
+  }
+  
+  lower_ls <-
+    
+    purrr::map(
+      
+      dplyr::pull(
+        .data,
+        !!lower_text_col
+      ),
+      
+      classify_ci
+      
+    )
+  
+  upper_ls <-
+    
+    purrr::map(
+      
+      dplyr::pull(
+        .data,
+        !!upper_text_col
+      ),
+      
+      classify_ci
+      
+    )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      CI_Lower_Status =
+        
+        purrr::map_chr(
+          lower_ls,
+          "status"
+        ),
+      
+      CI_Lower_Value =
+        
+        purrr::map_dbl(
+          lower_ls,
+          "value"
+        ),
+      
+      CI_Lower_Value_Scale =
+        
+        purrr::map_chr(
+          lower_ls,
+          "scale"
+        ),
+      
+      CI_Upper_Status =
+        
+        purrr::map_chr(
+          upper_ls,
+          "status"
+        ),
+      
+      CI_Upper_Value =
+        
+        purrr::map_dbl(
+          upper_ls,
+          "value"
+        ),
+      
+      CI_Upper_Value_Scale =
+        
+        purrr::map_chr(
+          upper_ls,
+          "scale"
+        )
+      
+    )
+  
+}
+
+transform_to_extract_dimension_text <- function(
+    .data,
+    source_col,
+    dimension_col = "Result_Dimension",
+    output_col = "Dimension_Specific_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  dimension_col <- rlang::sym(
+    dimension_col
+  )
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  extract_prefix <- function(
+    text_chr) {
+    
+    prefix_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "^[^:]+:"
+        
+      )
+    
+    if (
+      is.na(
+        prefix_chr
+      )
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    stringr::str_squish(
+      prefix_chr
+    )
+    
+  }
+  
+  prepend_prefix <- function(
+    extracted_chr,
+    prefix_chr) {
+    
+    if (
+      is.na(extracted_chr) ||
+      extracted_chr == ""
+    ) {
+      
+      return(
+        extracted_chr
+      )
+      
+    }
+    
+    if (
+      is.na(prefix_chr)
+    ) {
+      
+      return(
+        extracted_chr
+      )
+      
+    }
+    
+    if (
+      
+      stringr::str_starts(
+        
+        extracted_chr,
+        
+        stringr::fixed(
+          prefix_chr
+        )
+        
+      )
+      
+    ) {
+      
+      return(
+        extracted_chr
+      )
+      
+    }
+    
+    stringr::str_squish(
+      
+      paste(
+        prefix_chr,
+        extracted_chr
+      )
+      
+    )
+    
+  }
+  
+  extract_and_clause <- function(
+    text_chr,
+    dimension_chr) {
+    
+    if (
+      
+      !stringr::str_detect(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\sand\\s",
+          ignore_case = TRUE
+        )
+        
+      )
+      
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    clauses_chr <-
+      
+      stringr::str_split(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\sand\\s",
+          ignore_case = TRUE
+        )
+        
+      )[[1]]
+    
+    if (
+      dimension_chr == "QALY"
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "QALY",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else if (
+      
+      dimension_chr == "DALY"
+      
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "DALY",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else if (
+      
+      dimension_chr == "PSP"
+      
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "PSP",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else if (
+      
+      dimension_chr == "RELAPSE"
+      
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "relapse",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else if (
+      
+      dimension_chr == "MDE_DAY"
+      
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "MDE day",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else if (
+      
+      dimension_chr == "K10"
+      
+    ) {
+      
+      matches_dimension_lgl <-
+        
+        stringr::str_detect(
+          
+          clauses_chr,
+          
+          stringr::regex(
+            "K10",
+            ignore_case = TRUE
+          )
+          
+        )
+      
+    } else {
+      
+      matches_dimension_lgl <-
+        
+        rep(
+          FALSE,
+          length(
+            clauses_chr
+          )
+        )
+      
+    }
+    
+    hit_chr <-
+      
+      clauses_chr[
+        matches_dimension_lgl
+      ]
+    
+    if (
+      length(
+        hit_chr
+      ) == 0
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    stringr::str_squish(
+      hit_chr[1]
+    )
+    
+  }
+  
+  extract_dimension_text <- function(
+    statistic_text_chr,
+    dimension_chr) {
+    
+    if (
+      is.na(statistic_text_chr) ||
+      is.na(dimension_chr)
+    ) {
+      
+      return(
+        statistic_text_chr
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_squish(
+        statistic_text_chr
+      )
+    
+    prefix_chr <-
+      
+      extract_prefix(
+        text_chr
+      )
+    
+    and_hit_chr <-
+      
+      extract_and_clause(
+        
+        text_chr =
+          text_chr,
+        
+        dimension_chr =
+          dimension_chr
+        
+      )
+    
+    if (
+      
+      !is.na(
+        and_hit_chr
+      )
+      
+    ) {
+      
+      return(
+        
+        prepend_prefix(
+          
+          extracted_chr =
+            and_hit_chr,
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    if (
+      dimension_chr == "QALY"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*QALY[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    if (
+      dimension_chr == "DALY"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*DALY[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    if (
+      dimension_chr == "PSP"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*PSP[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    if (
+      dimension_chr == "RELAPSE"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*relapse[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    if (
+      dimension_chr == "MDE_DAY"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*MDE day[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    if (
+      dimension_chr == "K10"
+    ) {
+      
+      hit_chr <-
+        
+        stringr::str_extract(
+          
+          text_chr,
+          
+          "[^;&]*K10[^;&]*"
+          
+        )
+      
+      if (
+        !is.na(hit_chr)
+      ) {
+        
+        return(
+          
+          prepend_prefix(
+            
+            extracted_chr =
+              
+              stringr::str_squish(
+                hit_chr
+              ),
+            
+            prefix_chr =
+              prefix_chr
+            
+          )
+          
+        )
+        
+      }
+      
+    }
+    
+    text_chr
+    
+  }
+  
+  .data %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        extract_dimension_text(
+          
+          statistic_text_chr =
+            
+            as.character(
+              !!source_col
+            ),
+          
+          dimension_chr =
+            
+            as.character(
+              !!dimension_col
+            )
+          
+        )
+      
+    ) %>%
+    
+    dplyr::ungroup()
+  
+}
+transform_to_extract_point_estimate_text <- function(
+    .data,
+    source_col,
+    output_col = "Point_Estimate_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  get_point_estimate <- function(
+    text_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_squish(
+        text_chr
+      )
+    
+    text_chr <-
+      
+      stringr::str_remove(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\s*\\(95\\s*%?\\s*(CI|UI).*",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    text_chr <-
+      
+      stringr::str_remove(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\s*\\(dominant.*",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    text_chr <-
+      
+      stringr::str_remove(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\s*\\(dominated.*",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    stringr::str_squish(
+      text_chr
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        vapply(
+          
+          as.character(
+            !!source_col
+          ),
+          
+          get_point_estimate,
+          
+          character(1)
+          
+        )
+      
+    )
+  
+}
+transform_to_extract_result_dimensions <- function(
+    .data,
+    source_cols,
+    result_dimension_patterns_ls,
+    output_col = "Result_Dimensions") {
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  detect_dimensions <- function(
+    text_chr,
+    result_dimension_patterns_ls) {
+    
+    if (
+      is.na(text_chr) ||
+      text_chr == ""
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_to_lower(
+        text_chr
+      )
+    
+    detected_chr <- character()
+    
+    for (
+      
+      dimension_chr in
+      names(
+        result_dimension_patterns_ls
+      )
+      
+    ) {
+      
+      matched_lgl <-
+        
+        purrr::some(
+          
+          result_dimension_patterns_ls[[dimension_chr]],
+          
+          function(
+    pattern_chr
+          ) {
+            
+            stringr::str_detect(
+              
+              text_chr,
+              
+              stringr::fixed(
+                stringr::str_to_lower(
+                  pattern_chr
+                )
+              )
+              
+            )
+            
+          }
+    
+        )
+      
+      if (
+        matched_lgl
+      ) {
+        
+        detected_chr <-
+          
+          c(
+            detected_chr,
+            dimension_chr
+          )
+        
+      }
+      
+    }
+    
+    detected_chr <-
+      
+      unique(
+        detected_chr
+      )
+    
+    if (
+      length(
+        detected_chr
+      ) == 0
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    paste(
+      detected_chr,
+      collapse = "; "
+    )
+    
+  }
+  
+  source_cols_chr <-
+    
+    vapply(
+      
+      source_cols,
+      
+      rlang::as_name,
+      
+      character(1)
+      
+    )
+  
+  .data %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      .all_text_chr =
+        
+        paste(
+          
+          dplyr::c_across(
+            dplyr::all_of(
+              source_cols_chr
+            )
+          ),
+          
+          collapse = " "
+          
+        ),
+      
+      !!output_col :=
+        
+        detect_dimensions(
+          
+          text_chr =
+            .all_text_chr,
+          
+          result_dimension_patterns_ls =
+            result_dimension_patterns_ls
+          
+        )
+      
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::select(
+      -.all_text_chr
+    )
+  
+}
+transform_to_extract_result_status <- function(
+    .data,
+    source_col,
+    output_col = "Result_Status") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  classify_result <- function(
+    text_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_to_lower(
+        text_chr
+      )
+    
+    if (
+      
+      stringr::str_detect(
+        text_chr,
+        "\\$"
+      )
+      
+    ) {
+      
+      return(
+        "Numeric"
+      )
+      
+    }
+    
+    if (
+      
+      stringr::str_detect(
+        text_chr,
+        "\\bdominated\\b"
+      )
+      
+    ) {
+      
+      return(
+        "Dominated"
+      )
+      
+    }
+    
+    if (
+      
+      stringr::str_detect(
+        text_chr,
+        "\\bdominant\\b"
+      )
+      
+    ) {
+      
+      return(
+        "Dominant"
+      )
+      
+    }
+    
+    if (
+      
+      stringr::str_detect(
+        
+        text_chr,
+        
+        "[-−]?[0-9]+(?:\\.[0-9]+)?"
+        
+      )
+      
+    ) {
+      
+      return(
+        "Numeric"
+      )
+      
+    }
+    
+    
+    "Unknown"
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        vapply(
+          
+          as.character(
+            !!source_col
+          ),
+          
+          classify_result,
+          
+          character(1)
+          
+        )
+      
+    )
+  
+}
+transform_to_extract_result_value <- function(
+    .data,
+    source_col,
+    status_col = "Result_Status",
+    output_col = "Result_Value",
+    scale_col = "Result_Value_Scale") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  status_col <- rlang::ensym(
+    status_col
+  )
+  
+  output_col <- rlang::sym(
+    output_col
+  )
+  
+  scale_col <- rlang::sym(
+    scale_col
+  )
+  
+  extract_value <- function(
+    text_chr,
+    status_chr) {
+    
+    if (
+      is.na(text_chr) ||
+      is.na(status_chr)
+    ) {
+      
+      return(
+        list(
+          value = NA_real_,
+          scale = NA_character_
+        )
+      )
+      
+    }
+    
+    if (
+      status_chr != "Numeric"
+    ) {
+      
+      return(
+        list(
+          value = NA_real_,
+          scale = NA_character_
+        )
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_squish(
+        text_chr
+      )
+    
+    scale_chr <-
+      
+      if (
+        
+        stringr::str_detect(
+          
+          text_chr,
+          
+          stringr::regex(
+            "million",
+            ignore_case = TRUE
+          )
+          
+        )
+        
+      ) {
+        
+        "million"
+        
+      } else {
+        
+        NA_character_
+        
+      }
+    
+    dollar_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[-−]?\\$\\s*[0-9,]+(?:\\.[0-9]+)?"
+        
+      )
+    
+    if (
+      
+      !is.na(
+        dollar_chr
+      )
+      
+    ) {
+      
+      value_chr <-
+        
+        stringr::str_remove_all(
+          dollar_chr,
+          "\\$|,"
+        )
+      
+      value_chr <-
+        
+        chartr(
+          "−",
+          "-",
+          value_chr
+        )
+      
+      return(
+        
+        list(
+          
+          value =
+            
+            suppressWarnings(
+              as.numeric(
+                value_chr
+              )
+            ),
+          
+          scale =
+            scale_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    number_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[-−]?[0-9]+(?:\\.[0-9]+)?"
+        
+      )
+    
+    if (
+      is.na(number_chr)
+    ) {
+      
+      return(
+        
+        list(
+          
+          value = NA_real_,
+          scale = scale_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    number_chr <-
+      
+      chartr(
+        "−",
+        "-",
+        number_chr
+      )
+    
+    list(
+      
+      value =
+        
+        suppressWarnings(
+          as.numeric(
+            number_chr
+          )
+        ),
+      
+      scale =
+        scale_chr
+      
+    )
+    
+  }
+  
+  values_ls <-
+    
+    purrr::map2(
+      
+      dplyr::pull(
+        .data,
+        !!source_col
+      ),
+      
+      dplyr::pull(
+        .data,
+        !!status_col
+      ),
+      
+      extract_value
+      
+    )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        purrr::map_dbl(
+          values_ls,
+          "value"
+        ),
+      
+      !!scale_col :=
+        
+        purrr::map_chr(
+          values_ls,
+          "scale"
+        )
+      
+    )
+  
+}
 transform_to_extract_split_segment <- function(
     .data,
     split_pattern_col,
@@ -2978,7 +5070,104 @@ transform_to_extract_variant_segment <- function(
     )
   
 }
-
+transform_to_fill_statistic_type <- function(
+    .data,
+    statistic_col = "Statistic_Type",
+    source_col = CE_Pre_Item_Text) {
+  
+  statistic_col <- rlang::sym(
+    statistic_col
+  )
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!statistic_col :=
+        
+        dplyr::case_when(
+          
+          !is.na(
+            !!statistic_col
+          ) ~
+            
+            as.character(
+              !!statistic_col
+            ),
+          
+          stringr::str_detect(
+            
+            as.character(
+              !!source_col
+            ),
+            
+            stringr::regex(
+              "ICER",
+              ignore_case = TRUE
+            )
+            
+          ) ~
+            
+            "ICER",
+          
+          stringr::str_detect(
+            
+            as.character(
+              !!source_col
+            ),
+            
+            stringr::regex(
+              "\\bROI\\b",
+              ignore_case = TRUE
+            )
+            
+          ) ~
+            
+            "ROI",
+          
+          stringr::str_detect(
+            
+            as.character(
+              !!source_col
+            ),
+            
+            stringr::regex(
+              "\\bINMB\\b",
+              ignore_case = TRUE
+            )
+            
+          ) ~
+            
+            "INMB",
+          
+          stringr::str_detect(
+            
+            as.character(
+              !!source_col
+            ),
+            
+            stringr::regex(
+              "\\bNMB\\b",
+              ignore_case = TRUE
+            )
+            
+          ) ~
+            
+            "NMB",
+          
+          TRUE ~
+            
+            NA_character_
+          
+        )
+      
+    )
+  
+}
 transform_to_filtered_patterns <- function(
     .data,
     col,
