@@ -7,6 +7,7 @@ output: html_document
 
 ## Process and merge input dataset
 
+### Merge datasets
 ```{r}
 length(unique(raw_data_ls$summary$Paper_id))
 ```
@@ -30,24 +31,207 @@ processed_tb <- raw_data_ls$summary %>%
 
 ```
 
+
+### Define dataset patterns
+
 ```{r}
-processed_tb <- processed_tb %>%
-  dplyr::filter(Quality == "H")
+ce_perspectives_ls <- list(
+
+  Healthcare = c(
+
+    "Healthcare perspective:",
+    "Healthcare sector perspective:",
+    "Healthcare sector:",
+    "Health sector perspective:",
+    "Health sector:",
+    "Health-care perspective:",
+    "Healthcare:"
+
+  ),
+
+  Payer = c(
+
+    "Healthcare payer:",
+    "Health-care payer:",
+    "Australian Government (third-party payer of healthcare services)"
+
+  ),
+
+  Societal = c(
+
+    "Partial societal perspective:",
+    "Societal perspective:",
+    "Partial societal:",
+    "Societal:",
+    "Sococietal:"
+
+  )
+
+)
 ```
 
 ```{r}
-nrow(processed_tb)
-```
-```{r}
-processed_tb <- processed_tb %>%
-    transform_to_filtered_patterns(col = `Evaluation methods`,
-                                   allowable_patterns_chr = "CUA")
+statistic_patterns_ls <- list(
+
+  ICER = c(
+    "ICER =",
+    "ICER:",
+    "ICER - "
+  ),
+
+  INMB = c(
+    "INMB"
+  ),
+
+  NMB = c(
+    "Incremental NMB:",
+    "NMB ="
+  ),
+
+  ROI = c(
+    "ROI:"
+  )
+
+)
+
+
 ```
 
 ```{r}
-nrow(processed_tb)
+result_dimension_patterns_ls <- list(
+
+  QALY = c(
+    "qaly gained",
+    "qaly lost"
+  ),
+
+  DALY = c(
+    "daly averted"
+  ),
+
+  K10 = c(
+    "point decreased on k10",
+    "k10"
+  ),
+
+  MADRS = c(
+    "madrs point"
+  ),
+
+  PSP = c(
+    "psp point"
+  ),
+
+  RELAPSE = c(
+    "relapse case avoided"
+  ),
+
+  MDE_DAY = c(
+    "mde day averted"
+  )
+
+)
 ```
 
+```{r}
+result_status_patterns_ls <- list(
+
+  Dominated = c(
+    "dominated"
+  ),
+
+  Dominant = c(
+    "dominant",
+    "cost-saving per",
+    "cost saving per"
+    # ,
+    # "cost-saving.*prevented",
+    # "cost saving.*prevented",
+    # "cost-saving.*avoided",
+    # "cost saving.*avoided"
+  ),
+
+  Similar = c(
+
+    "no significant difference",
+
+    "no significant differences",
+
+    "non-inferior",
+
+    "noninferior",
+
+    "equivalent",
+
+    "equivalence"
+
+  )
+
+)
+```
+
+```{r}
+numeric_patterns_chr <- c(
+
+  "\\$\\s*[0-9]",
+
+  "[-−]?[0-9]+(?:\\.[0-9]+)?"
+
+)
+```
+
+
+```{r}
+multi_dimension_patterns_chr <- c(
+      "QALY; DALY",
+      "QALY; PSP",
+      "QALY; RELAPSE",
+      "DALY; MDE_DAY"
+    )
+```
+
+
+```{r}
+horizon_patterns_ls <- list(
+      `3-month` = c(
+        "3-month",
+        "3 month"
+      ),
+      `6-month` = c(
+        "6mth",
+        "6-month",
+        "6 month"
+      ),
+      `1-year` = c(
+        "1 year",
+        "1-year",
+        "1yr",
+        "1 yr"
+      ),
+      `31-year` = c(
+        "31 year",
+        "31-year"
+      )
+    )
+```
+
+
+```{r}
+category_patterns_ls <- list(
+
+  Distress = c(
+    "high distress",
+    "low distress"
+  )
+
+)
+```
+
+
+
+
+
+### Clean and expand data
 
 ```{r}
 processed_tb <- processed_tb %>%
@@ -85,42 +269,6 @@ processed_tb <- processed_tb %>%
   )
 ```
 
-
-```{r}
-ce_perspectives_ls <- list(
-
-  Healthcare = c(
-
-    "Healthcare perspective:",
-    "Healthcare sector perspective:",
-    "Healthcare sector:",
-    "Health sector perspective:",
-    "Health sector:",
-    "Health-care perspective:",
-    "Healthcare:"
-
-  ),
-
-  Payer = c(
-
-    "Healthcare payer:",
-    "Health-care payer:",
-    "Australian Government (third-party payer of healthcare services)"
-
-  ),
-
-  Societal = c(
-
-    "Partial societal perspective:",
-    "Societal perspective:",
-    "Partial societal:",
-    "Societal:",
-    "Sococietal:"
-
-  )
-
-)
-```
 
 ```{r}
 processed_tb <- processed_tb  %>%
@@ -173,17 +321,6 @@ processed_tb <- processed_tb  %>%
 
 ```{r}
 processed_tb <- processed_tb  %>%
-  dplyr::mutate(
-    Has_Secondary_Block =
-      !is.na(
-        CE_Trailing_Text
-      )
-  )
-```
-
-
-```{r}
-processed_tb <- processed_tb  %>%
 
   transform_to_expand_unnumbered_perspectives(
 
@@ -200,32 +337,6 @@ processed_tb <- processed_tb  %>%
 nrow(processed_tb)
 ```
 
-```{r}
-statistic_patterns_ls <- list(
-
-  ICER = c(
-    "ICER =",
-    "ICER:",
-    "ICER - "
-  ),
-
-  INMB = c(
-    "INMB"
-  ),
-
-  NMB = c(
-    "Incremental NMB:",
-    "NMB ="
-  ),
-
-  ROI = c(
-    "ROI:"
-  )
-
-)
-
-
-```
 
 ```{r}
 processed_tb <- processed_tb  %>%
@@ -253,44 +364,6 @@ processed_tb <- processed_tb  %>%
 
 ```{r}
 nrow(processed_tb)
-```
-
-
-
-```{r}
-result_dimension_patterns_ls <- list(
-
-  QALY = c(
-    "qaly gained",
-    "qaly lost"
-  ),
-
-  DALY = c(
-    "daly averted"
-  ),
-
-  K10 = c(
-    "point decreased on k10",
-    "k10"
-  ),
-
-  MADRS = c(
-    "madrs point"
-  ),
-
-  PSP = c(
-    "psp point"
-  ),
-
-  RELAPSE = c(
-    "relapse case avoided"
-  ),
-
-  MDE_DAY = c(
-    "mde day averted"
-  )
-
-)
 ```
 
 ```{r}
@@ -344,24 +417,6 @@ processed_tb <- processed_tb %>%
 ```{r}
 nrow(processed_tb)
 ```
-```{r}
-processed_tb <- processed_tb %>%
-
-  dplyr::mutate(
-
-    Multi_Dimension_Result =
-
-      Result_Dimensions %in%
-
-      c(
-        "QALY; DALY",
-        "QALY; PSP",
-        "QALY; RELAPSE",
-        "DALY; MDE_DAY"
-      )
-
-  )
-```
 
 ```{r}
 processed_tb <- processed_tb %>%
@@ -380,21 +435,10 @@ processed_tb <- processed_tb %>%
   )
 ```
 
-
 ```{r}
 processed_tb <- processed_tb %>%
 
   transform_to_fill_statistic_type()
-```
-
-```{r}
-processed_tb %>%
-
-  dplyr::count(
-    Statistic_Type,
-    Result_Dimension,
-    sort = TRUE
-  )
 ```
 
 ```{r}
@@ -420,27 +464,11 @@ processed_tb <- processed_tb %>%
 ```
 
 ```{r}
-nrow(processed_tb)
-```
-
-
-```{r}
 processed_tb <- processed_tb %>%
-
-  transform_to_extract_result_status(
-
-    source_col =
-      Dimension_Text,
-
-    output_col =
-      "Result_Status"
-
-  )
+  transform_to_flag_complex_results(multi_dimension_patterns_chr = multi_dimension_patterns_chr,
+    horizon_patterns_ls = horizon_patterns_ls)
 ```
 
-```{r}
-nrow(processed_tb)
-```
 ```{r}
 processed_tb <- processed_tb %>%
 
@@ -452,59 +480,7 @@ processed_tb <- processed_tb %>%
     output_col =
       "Point_Estimate_Text"
 
-  )
-```
-
-
-
-```{r}
-processed_tb <- processed_tb %>%
-
-  transform_to_extract_result_value(
-
-    source_col =
-      Dimension_Text,
-
-    status_col =
-      Result_Status,
-
-    output_col =
-      "Result_Value"
-
-  )
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-
-  dplyr::mutate(
-
-    Has_Multiple_Horizons =
-
-      Paper_id %in%
-
-      c(
-        "551",
-        "435",
-        "431"
-      )
-
-  )
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-
-  transform_to_extract_ci_text(
-
-    source_col =
-      Dimension_Text
-
-  )
-```
-
-```{r}
-processed_tb <- processed_tb %>%
+  ) %>%
 
   transform_to_extract_result_status(
 
@@ -512,13 +488,13 @@ processed_tb <- processed_tb %>%
       Point_Estimate_Text,
 
     output_col =
-      "Result_Status"
+      "Result_Status",
+    
+      result_status_patterns_ls = result_status_patterns_ls,
 
-  )
-```
+  numeric_patterns_chr = numeric_patterns_chr
 
-```{r}
-processed_tb <- processed_tb %>%
+  ) %>%
 
   transform_to_extract_result_value(
 
@@ -537,6 +513,26 @@ processed_tb <- processed_tb %>%
   )
 ```
 
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_ci_text(
+
+    source_col =
+      Dimension_Text
+
+  )
+```
+
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  transform_to_extract_ci_values()
+```
+
+
 ```{r}
 processed_tb <- processed_tb %>%
 
@@ -554,21 +550,7 @@ processed_tb <- processed_tb %>%
 
           Result_Value
 
-      )
-
-  )
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-
-  transform_to_extract_ci_values()
-```
-
-```{r}
-processed_tb <- processed_tb %>%
-
-  dplyr::mutate(
+      ),
 
     CI_Lower_Value_Adjusted =
 
@@ -604,51 +586,332 @@ processed_tb <- processed_tb %>%
 
 
 ```{r}
+temporal_expanded_tb <-
+
+  processed_tb %>%
+
+  dplyr::filter(
+    Needs_Horizon_Expansion
+  ) %>%
+
+  transform_to_expand_temporal_results(
+
+    source_col =
+      Dimension_Text,
+
+    horizon_patterns_ls =
+      horizon_patterns_ls
+
+  )
+```
+
+```{r}
+temporal_expanded_tb <-
+
+  temporal_expanded_tb %>%
+
+  transform_to_extract_point_estimate_text(
+
+    source_col =
+      Expanded_Dimension_Text,
+
+    output_col =
+      "Expanded_Point_Estimate_Text"
+
+  ) %>%
+
+  transform_to_extract_result_status(
+
+    source_col =
+      Expanded_Point_Estimate_Text,
+
+    output_col =
+      "Expanded_Result_Status",
+    
+      result_status_patterns_ls =
+    result_status_patterns_ls,
+
+  numeric_patterns_chr =
+    numeric_patterns_chr
+
+  ) %>%
+
+  transform_to_extract_result_value(
+
+    source_col =
+      Expanded_Point_Estimate_Text,
+
+    status_col =
+      Expanded_Result_Status,
+
+    output_col =
+      "Expanded_Result_Value",
+
+    scale_col =
+      "Expanded_Result_Value_Scale"
+
+  )
+```
+
+```{r}
+normalized_tb <-
+
+  dplyr::bind_rows(
+
+    processed_tb %>%
+      dplyr::filter(
+        !Needs_Horizon_Expansion
+      ),
+
+    temporal_expanded_tb
+
+  )
+```
+
+
+```{r}
+normalized_tb <- normalized_tb %>%
+
+  transform_to_normalize_time_horizons(
+
+    source_col =
+      Time_Horizon,
+
+    horizon_patterns_ls =
+      horizon_patterns_ls
+
+  )
+```
+```{r}
+subgroup_expanded_tb <-
+
+  normalized_tb %>%
+
+  dplyr::filter(
+    Needs_Subgroup_Expansion
+  ) %>%
+
+  transform_to_expand_categorical_results(
+
+    source_col =
+      Dimension_Text,
+
+    category_patterns_ls =
+      category_patterns_ls
+
+  ) %>%
+
+  transform_to_extract_point_estimate_text(
+
+    source_col =
+      Categorical_Result_Text,
+
+    output_col =
+      "Categorical_Point_Estimate_Text"
+
+  ) %>%
+
+  transform_to_extract_result_status(
+
+    source_col =
+      Categorical_Point_Estimate_Text,
+
+    output_col =
+      "Categorical_Result_Status",
+      result_status_patterns_ls =
+    result_status_patterns_ls,
+
+  numeric_patterns_chr =
+    numeric_patterns_chr
+
+  ) %>%
+
+  transform_to_extract_result_value(
+
+    source_col =
+      Categorical_Point_Estimate_Text,
+
+    status_col =
+      Categorical_Result_Status,
+
+    output_col =
+      "Categorical_Result_Value",
+
+    scale_col =
+      "Categorical_Result_Value_Scale"
+
+  )
+```
+
+```{r}
+final_normalized_tb <-
+
+  dplyr::bind_rows(
+
+    normalized_tb %>%
+
+      dplyr::filter(
+        !Needs_Subgroup_Expansion
+      ),
+
+    subgroup_expanded_tb
+
+  )
+```
+
+
+```{r}
+final_normalized_tb <- final_normalized_tb %>%
+
+  dplyr::mutate(
+
+    Final_Result_Status =
+
+      dplyr::coalesce(
+
+        Expanded_Result_Status,
+
+        Categorical_Result_Status,
+
+        Result_Status
+
+      ),
+
+    Final_Result_Value =
+
+      dplyr::coalesce(
+
+        Expanded_Result_Value,
+
+        Categorical_Result_Value,
+
+        Result_Value
+
+      )
+
+  )
+```
+
+
+```{r}
+final_normalized_tb <- final_normalized_tb %>%
+
+  dplyr::mutate(
+
+    Final_Result_Text =
+
+      dplyr::coalesce(
+
+        Expanded_Dimension_Text,
+
+        Categorical_Result_Text,
+
+        Point_Estimate_Text
+
+      ),
+
+    Final_Result_Value_Scale =
+
+      dplyr::coalesce(
+
+        Expanded_Result_Value_Scale,
+
+        Categorical_Result_Value_Scale,
+
+        Result_Value_Scale
+
+      )
+
+  )
+```
+
+
+### QA diagnostics
+
+```{r}
+normalization_candidates_tb <-
+
+  processed_tb %>%
+
+  dplyr::filter(
+
+    Needs_Horizon_Expansion |
+
+      Needs_Subgroup_Expansion
+
+  )
+
+```
+
+```{r}
+final_normalized_tb %>%
+
+  dplyr::count(
+    Final_Result_Status,
+    sort = TRUE
+  )
+```
+
+```{r}
+final_normalized_tb %>%
+
+  dplyr::summarise(
+
+    N = dplyr::n(),
+
+    Numeric =
+      sum(
+        Final_Result_Status == "Numeric",
+        na.rm = TRUE
+      ),
+
+    Dominant =
+      sum(
+        Final_Result_Status == "Dominant",
+        na.rm = TRUE
+      ),
+
+    Dominated =
+      sum(
+        Final_Result_Status == "Dominated",
+        na.rm = TRUE
+      ),
+
+    Similar =
+      sum(
+        Final_Result_Status == "Similar",
+        na.rm = TRUE
+      )
+
+  )
+```
+
+
+*One observation (Paper 511) remained classified as Unknown due to a shared dominance statement reported jointly for DALYs averted and MDE days averted. The issue arises from multidimensional result parsing rather than status classification.*
+
+
+
+
+### Filter dataset (should be on nomalized....)
+
+```{r}
 # processed_tb <- processed_tb %>%
-# 
-#   transform_to_expand_horizons(
-# 
-#     source_col =
-#       Dimension_Text
-# 
-#   )
+#   dplyr::filter(Quality == "H")
 ```
 
 ```{r}
-nrow(processed_tb)
+# nrow(processed_tb)
 ```
-
-###################
-
-
-
-```{r}
-
-```
-
-
 ```{r}
 # processed_tb <- processed_tb %>%
-# 
-#   transform_to_expand_ce_perspectives(
-# 
-#     source_col =
-#       `Cost-effectiveness outcomes (in 2024 AUD)`,
-# 
-#     variants_ls =
-#       ce_perspectives_ls,
-# 
-#     perspective_text_col =
-#       "CE_Perspective_Text",
-# 
-#     original_text_col =
-#       "CE_Results_Original",
-# 
-#     matched_pattern_col =
-#       "Matched_Perspective_Pattern"
-# 
-#   )
+#     transform_to_filtered_patterns(col = `Evaluation methods`,
+#                                    allowable_patterns_chr = "CUA")
+```
+
+```{r}
+# nrow(processed_tb)
 ```
 
 
-#################
+
+

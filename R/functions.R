@@ -679,6 +679,63 @@ transform_to_clean_text <- function(
     )
   
 }
+transform_to_expand_categorical_results <- function(
+    .data,
+    source_col,
+    category_patterns_ls,
+    category_type_col = "Category_Type",
+    category_label_col = "Category_Label",
+    expanded_text_col =  "Categorical_Result_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  category_type_col <- rlang::sym(
+    category_type_col
+  )
+  
+  category_label_col <- rlang::sym(
+    category_label_col
+  )
+  
+  expanded_text_col <- rlang::sym(
+    expanded_text_col
+  )
+  
+  .data %>%
+    
+    transform_to_extract_categorical_results(
+      
+      source_col =
+        !!source_col,
+      
+      category_patterns_ls =
+        category_patterns_ls,
+      
+      output_col =
+        "Categorical_Results"
+      
+    ) %>%
+    
+    tidyr::unnest(
+      Categorical_Results
+    ) %>%
+    
+    dplyr::rename(
+      
+      !!category_type_col :=
+        Category_Type,
+      
+      !!category_label_col :=
+        Category_Label,
+      
+      !!expanded_text_col :=
+        Categorical_Result_Text
+      
+    )
+  
+}
 # transform_to_expand_ce_perspectives <- function(
 #     .data,
 #     source_col,
@@ -1401,6 +1458,186 @@ transform_to_expand_ce_statistics <- function(
         )
         
       )
+      
+    )
+  
+}
+transform_to_expand_distress_subgroups <- function(
+    .data,
+    source_col,
+    subgroup_col = "Subgroup",
+    patterns_chr = c(
+      "high distress",
+      "low distress"
+    )) {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  subgroup_col <- rlang::sym(
+    subgroup_col
+  )
+  
+  expand_subgroups <- function(
+    text_chr,
+    patterns_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Subgroup = NA_character_,
+          
+          Expanded_Text = text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    if (
+      
+      !stringr::str_detect(
+        
+        text_chr,
+        
+        stringr::regex(
+          "high distress.*low distress|low distress.*high distress",
+          ignore_case = TRUE
+        )
+        
+      )
+      
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Subgroup = NA_character_,
+          
+          Expanded_Text = text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    high_hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        stringr::regex(
+          "Dominant\\s*\\(high distress\\)",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    low_hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        stringr::regex(
+          "\\$[0-9,]+(?:\\.[0-9]+)?\\s*\\(low distress\\)",
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    dplyr::bind_rows(
+      
+      tibble::tibble(
+        
+        Subgroup =
+          "High distress",
+        
+        Expanded_Text =
+          
+          ifelse(
+            
+            is.na(high_hit_chr),
+            
+            text_chr,
+            
+            "Dominant"
+            
+          )
+        
+      ),
+      
+      tibble::tibble(
+        
+        Subgroup =
+          "Low distress",
+        
+        Expanded_Text =
+          
+          ifelse(
+            
+            is.na(low_hit_chr),
+            
+            text_chr,
+            
+            stringr::str_remove(
+              low_hit_chr,
+              "\\s*\\(low distress\\)"
+            )
+            
+          )
+        
+      )
+      
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      .subgroup_ls = list(
+        
+        expand_subgroups(
+          
+          text_chr =
+            
+            as.character(
+              !!source_col
+            ),
+          
+          patterns_chr =
+            patterns_chr
+          
+        )
+        
+      )
+      
+    ) %>%
+    
+    tidyr::unnest(
+      .subgroup_ls
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::rename(
+      
+      !!subgroup_col :=
+        Subgroup
       
     )
   
@@ -2217,6 +2454,77 @@ transform_to_expand_result_dimensions <- function(
     )
   
 }
+transform_to_expand_temporal_results <- function(
+    .data,
+    source_col,
+    horizon_patterns_ls,
+    horizon_col = "Time_Horizon",
+    expanded_text_col = "Expanded_Dimension_Text") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  horizon_col <- rlang::sym(
+    horizon_col
+  )
+  
+  expanded_text_col <- rlang::sym(
+    expanded_text_col
+  )
+  
+  tmp_tb <-
+    
+    .data %>%
+    
+    transform_to_extract_temporal_results(
+      
+      source_col =
+        !!source_col,
+      
+      horizon_patterns_ls =
+        horizon_patterns_ls,
+      
+      output_col =
+        "Temporal_Results"
+      
+    ) %>%
+    
+    tidyr::unnest(
+      Temporal_Results
+    )
+  
+  tmp_tb %>%
+    
+    dplyr::mutate(
+      
+      Temporal_Result_Text =
+        
+        stringr::str_remove(
+          Temporal_Result_Text,
+          ";$"
+        ),
+      
+      Temporal_Result_Text =
+        
+        stringr::str_squish(
+          Temporal_Result_Text
+        )
+      
+    ) %>%
+    
+    dplyr::rename(
+      
+      !!horizon_col :=
+        Time_Horizon,
+      
+      !!expanded_text_col :=
+        Temporal_Result_Text
+      
+    )
+  
+}
+
 transform_to_expand_unnumbered_perspectives <- function( # Could this be more general (e.g., pass a perspectives fn if req, etc)
     .data,
     source_col,
@@ -2566,6 +2874,167 @@ transform_to_expand_unnumbered_perspectives <- function( # Could this be more ge
           ".perspectives_ls"
         )
       )
+      
+    )
+  
+}
+
+transform_to_extract_categorical_results <- function(
+    .data,
+    source_col,
+    category_patterns_ls,
+    output_col = "Categorical_Results") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  extract_categories <- function(
+    text_chr,
+    category_patterns_ls) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Category_Type =
+            NA_character_,
+          
+          Category_Label =
+            NA_character_,
+          
+          Categorical_Result_Text =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    results_ls <- list()
+    
+    for (
+      category_type_chr in names(
+        category_patterns_ls
+      )
+    ) {
+      
+      labels_chr <-
+        
+        category_patterns_ls[[category_type_chr]]
+      
+      for (
+        label_chr in labels_chr
+      ) {
+        
+        pattern_chr <-
+          
+          paste0(
+            "(Dominant|Dominated|\\$[0-9,]+(?:\\.[0-9]+)?)\\s*\\(",
+            label_chr,
+            "\\)"
+          )
+        
+        hit_chr <-
+          
+          stringr::str_match(
+            
+            text_chr,
+            
+            stringr::regex(
+              pattern_chr,
+              ignore_case = TRUE
+            )
+            
+          )[, 2]
+        
+        if (
+          !is.na(hit_chr)
+        ) {
+          
+          results_ls <-
+            
+            c(
+              
+              results_ls,
+              
+              list(
+                
+                tibble::tibble(
+                  
+                  Category_Type =
+                    category_type_chr,
+                  
+                  Category_Label =
+                    label_chr,
+                  
+                  Categorical_Result_Text =
+                    hit_chr
+                  
+                )
+                
+              )
+              
+            )
+          
+        }
+        
+      }
+      
+    }
+    
+    if (
+      length(
+        results_ls
+      ) == 0
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Category_Type =
+            NA_character_,
+          
+          Category_Label =
+            NA_character_,
+          
+          Categorical_Result_Text =
+            text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    dplyr::bind_rows(
+      results_ls
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        purrr::map(
+          
+          !!source_col,
+          
+          ~ extract_categories(
+            .x,
+            category_patterns_ls
+          )
+          
+        )
       
     )
   
@@ -4185,7 +4654,28 @@ transform_to_extract_result_dimensions <- function(
 transform_to_extract_result_status <- function(
     .data,
     source_col,
-    output_col = "Result_Status") {
+    output_col = "Result_Status",
+    result_status_patterns_ls = list(
+      Dominated = c(
+        "dominated"
+      ),
+      Dominant = c(
+        "dominant"
+      ),
+      Similar = c(
+        "no significant difference",
+        "no significant differences",
+        "non-inferior",
+        "noninferior",
+        "equivalent",
+        "equivalence"
+      )
+    ),
+    numeric_patterns_chr = c(
+      "\\$\\s*[0-9]",
+      "[-−]?[0-9]+(?:\\.[0-9]+)?"
+    )
+) {
   
   source_col <- rlang::ensym(
     source_col
@@ -4195,88 +4685,106 @@ transform_to_extract_result_status <- function(
     output_col
   )
   
-  classify_result <- function(
-    text_chr) {
+  classify_status <- function(
+    text_chr,
+    result_status_patterns_ls,
+    numeric_patterns_chr) {
     
     if (
       is.na(text_chr)
     ) {
       
       return(
-        NA_character_
+        "Unknown"
       )
       
     }
     
     text_chr <-
       
+      stringr::str_squish(
+        text_chr
+      )
+    
+    text_lower_chr <-
+      
       stringr::str_to_lower(
         text_chr
       )
     
-    if (
-      
-      stringr::str_detect(
-        text_chr,
-        "\\$"
+    # ----------------------------------
+    # configured status patterns
+    # ----------------------------------
+    
+    for (
+      status_chr in names(
+        result_status_patterns_ls
       )
-      
     ) {
       
-      return(
-        "Numeric"
-      )
-      
-    }
-    
-    if (
-      
-      stringr::str_detect(
-        text_chr,
-        "\\bdominated\\b"
-      )
-      
-    ) {
-      
-      return(
-        "Dominated"
-      )
-      
-    }
-    
-    if (
-      
-      stringr::str_detect(
-        text_chr,
-        "\\bdominant\\b"
-      )
-      
-    ) {
-      
-      return(
-        "Dominant"
-      )
-      
-    }
-    
-    if (
-      
-      stringr::str_detect(
+      patterns_chr <-
         
-        text_chr,
-        
-        "[-−]?[0-9]+(?:\\.[0-9]+)?"
-        
-      )
+        result_status_patterns_ls[[status_chr]]
       
-    ) {
+      pattern_regex_chr <-
+        
+        paste(
+          patterns_chr,
+          collapse = "|"
+        )
       
-      return(
-        "Numeric"
-      )
+      if (
+        
+        stringr::str_detect(
+          
+          text_lower_chr,
+          
+          stringr::regex(
+            pattern_regex_chr,
+            ignore_case = TRUE
+          )
+          
+        )
+        
+      ) {
+        
+        return(
+          status_chr
+        )
+        
+      }
       
     }
     
+    # ----------------------------------
+    # numeric detection
+    # ----------------------------------
+    
+    for (
+      pattern_chr in
+      numeric_patterns_chr
+    ) {
+      
+      if (
+        
+        stringr::str_detect(
+          text_chr,
+          pattern_chr
+        )
+        
+      ) {
+        
+        return(
+          "Numeric"
+        )
+        
+      }
+      
+    }
+    
+    # ----------------------------------
+    # default
+    # ----------------------------------
     
     "Unknown"
     
@@ -4288,15 +4796,17 @@ transform_to_extract_result_status <- function(
       
       !!output_col :=
         
-        vapply(
+        purrr::map_chr(
           
-          as.character(
-            !!source_col
-          ),
+          !!source_col,
           
-          classify_result,
-          
-          character(1)
+          ~ classify_status(
+            text_chr = .x,
+            result_status_patterns_ls =
+              result_status_patterns_ls,
+            numeric_patterns_chr =
+              numeric_patterns_chr
+          )
           
         )
       
@@ -4751,6 +5261,599 @@ transform_to_extract_split_segment <- function(
   outp_tb %>%
     dplyr::select(
       -dplyr::any_of(".remainder_chr")
+    )
+  
+}
+transform_to_extract_temporal_results <- function(
+    .data,
+    source_col,
+    horizon_patterns_ls,
+    output_col = "Temporal_Results") {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  extract_temporal_results <- function(
+    text_chr,
+    horizon_patterns_ls) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Time_Horizon =
+            NA_character_,
+          
+          Temporal_Result_Text =
+            NA_character_
+          
+        )
+        
+      )
+      
+    }
+    
+    text_chr <-
+      
+      stringr::str_squish(
+        text_chr
+      )
+    
+    # =========================================================
+    # GRAMMAR A
+    # estimate followed by horizon
+    # $45,005 (1-year); $2,711 (31-year)
+    # =========================================================
+    
+    estimate_before_hits <-
+      
+      stringr::str_match_all(
+        
+        text_chr,
+        
+        "\\$[^;]+?\\(([^\\)]+)\\)"
+        
+      )[[1]]
+    
+    all_horizon_patterns_chr <-
+      
+      unique(
+        
+        unlist(
+          
+          horizon_patterns_ls,
+          
+          use.names = FALSE
+          
+        )
+        
+      )
+    
+    if (
+      nrow(
+        estimate_before_hits
+      ) > 0
+    ) {
+      
+      keep_idx_lgl <-
+        
+        purrr::map_lgl(
+          
+          estimate_before_hits[, 2],
+          
+          function(label_chr) {
+            
+            any(
+              
+              stringr::str_detect(
+                
+                stringr::str_to_lower(
+                  label_chr
+                ),
+                
+                stringr::regex(
+                  
+                  paste(
+                    all_horizon_patterns_chr,
+                    collapse = "|"
+                  ),
+                  
+                  ignore_case = TRUE
+                  
+                )
+                
+              )
+              
+            )
+            
+          }
+          
+        )
+      
+      estimate_before_hits <-
+        
+        estimate_before_hits[
+          keep_idx_lgl,
+          ,
+          drop = FALSE
+        ]
+      
+    }
+    
+    if (
+      nrow(
+        estimate_before_hits
+      ) > 1
+    ) {
+      
+      out_ls <-
+        
+        purrr::map(
+          
+          seq_len(
+            nrow(
+              estimate_before_hits
+            )
+          ),
+          
+          function(i) {
+            
+            estimate_chr <-
+              
+              stringr::str_trim(
+                
+                estimate_before_hits[
+                  i,
+                  1
+                ]
+                
+              )
+            
+            horizon_chr <-
+              
+              stringr::str_trim(
+                
+                estimate_before_hits[
+                  i,
+                  2
+                ]
+                
+              )
+            
+            estimate_chr <-
+              
+              stringr::str_remove(
+                
+                estimate_chr,
+                
+                paste0(
+                  "\\s*\\(",
+                  stringr::fixed(
+                    horizon_chr
+                  ),
+                  "\\)"
+                )
+                
+              )
+            
+            tibble::tibble(
+              
+              Time_Horizon =
+                horizon_chr,
+              
+              Temporal_Result_Text =
+                estimate_chr
+              
+            )
+            
+          }
+          
+        )
+      
+      return(
+        
+        dplyr::bind_rows(
+          out_ls
+        )
+        
+      )
+      
+    }
+    
+    # =========================================================
+    # GRAMMAR B
+    # horizon followed by estimate
+    # 6mth: $1,272 ... 1yr: $2,788 ...
+    # =========================================================
+    
+    all_patterns_chr <-
+      
+      unique(
+        
+        unlist(
+          
+          horizon_patterns_ls,
+          
+          use.names = FALSE
+          
+        )
+        
+      )
+    
+    horizon_regex_chr <-
+      
+      paste(
+        
+        stringr::str_replace_all(
+          all_patterns_chr,
+          "([\\-])",
+          "\\\\\\1"
+        ),
+        
+        collapse = "|"
+        
+      )
+    
+    matches_mat <-
+      
+      stringr::str_locate_all(
+        
+        stringr::str_to_lower(
+          text_chr
+        ),
+        
+        stringr::regex(
+          horizon_regex_chr,
+          ignore_case = TRUE
+        )
+        
+      )[[1]]
+    
+    if (
+      nrow(
+        matches_mat
+      ) <= 1
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Time_Horizon =
+            NA_character_,
+          
+          Temporal_Result_Text =
+            text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    out_ls <- vector(
+      "list",
+      nrow(matches_mat)
+    )
+    
+    for (
+      i in seq_len(
+        nrow(matches_mat)
+      )
+    ) {
+      
+      start_pos <-
+        
+        matches_mat[
+          i,
+          "start"
+        ]
+      
+      end_pos <-
+        
+        if (
+          i <
+          nrow(matches_mat)
+        ) {
+          
+          matches_mat[
+            i + 1,
+            "start"
+          ] - 1
+          
+        } else {
+          
+          nchar(
+            text_chr
+          )
+          
+        }
+      
+      segment_chr <-
+        
+        substr(
+          
+          text_chr,
+          
+          start_pos,
+          
+          end_pos
+          
+        )
+      
+      horizon_chr <-
+        
+        stringr::str_extract(
+          
+          segment_chr,
+          
+          stringr::regex(
+            horizon_regex_chr,
+            ignore_case = TRUE
+          )
+          
+        )
+      
+      segment_chr <-
+        
+        stringr::str_remove(
+          
+          segment_chr,
+          
+          paste0(
+            "^",
+            stringr::fixed(
+              horizon_chr
+            ),
+            "\\s*:\\s*"
+          )
+          
+        )
+      
+      out_ls[[i]] <-
+        
+        tibble::tibble(
+          
+          Time_Horizon =
+            horizon_chr,
+          
+          Temporal_Result_Text =
+            
+            stringr::str_squish(
+              segment_chr
+            )
+          
+        )
+      
+    }
+    
+    dplyr::bind_rows(
+      out_ls
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!output_col :=
+        
+        purrr::map(
+          
+          !!source_col,
+          
+          ~ extract_temporal_results(
+            .x,
+            horizon_patterns_ls
+          )
+          
+        )
+      
+    )
+  
+}
+transform_to_extract_temporal_segments <- function(
+    .data,
+    source_col,
+    horizon_patterns_ls) {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  all_patterns_chr <-
+    
+    unique(
+      
+      unlist(
+        horizon_patterns_ls,
+        use.names = FALSE
+      )
+      
+    )
+  
+  extract_segments <- function(
+    text_chr,
+    patterns_chr) {
+    
+    if (
+      is.na(text_chr)
+    ) {
+      
+      return(
+        tibble::tibble(
+          Time_Horizon = NA_character_,
+          Temporal_Result_Text = NA_character_
+        )
+      )
+      
+    }
+    
+    matches_tb <-
+      
+      purrr::map_dfr(
+        
+        patterns_chr,
+        
+        function(pattern_chr) {
+          
+          loc_mat <-
+            
+            stringr::str_locate_all(
+              
+              stringr::str_to_lower(
+                text_chr
+              ),
+              
+              stringr::fixed(
+                stringr::str_to_lower(
+                  pattern_chr
+                )
+              )
+              
+            )[[1]]
+          
+          if (
+            nrow(loc_mat) == 0
+          ) {
+            
+            return(NULL)
+            
+          }
+          
+          tibble::tibble(
+            
+            Horizon_Label =
+              pattern_chr,
+            
+            Start =
+              loc_mat[, "start"]
+            
+          )
+          
+        }
+        
+      )
+    
+    if (
+      nrow(matches_tb) <= 1
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Time_Horizon =
+            
+            if (
+              nrow(matches_tb) == 1
+            ) {
+              
+              matches_tb$Horizon_Label
+              
+            } else {
+              
+              NA_character_
+              
+            },
+          
+          Temporal_Result_Text =
+            text_chr
+          
+        )
+        
+      )
+      
+    }
+    
+    matches_tb <-
+      
+      matches_tb %>%
+      
+      dplyr::arrange(
+        Start
+      )
+    
+    purrr::map_dfr(
+      
+      seq_len(
+        nrow(matches_tb)
+      ),
+      
+      function(i) {
+        
+        start_pos <-
+          
+          matches_tb$Start[i]
+        
+        end_pos <-
+          
+          if (
+            
+            i <
+            nrow(matches_tb)
+            
+          ) {
+            
+            matches_tb$Start[i + 1] - 1
+            
+          } else {
+            
+            nchar(
+              text_chr
+            )
+            
+          }
+        
+        tibble::tibble(
+          
+          Time_Horizon =
+            
+            matches_tb$Horizon_Label[i],
+          
+          Temporal_Result_Text =
+            
+            stringr::str_squish(
+              
+              substr(
+                text_chr,
+                start_pos,
+                end_pos
+              )
+              
+            )
+          
+        )
+        
+      }
+      
+    )
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      Temporal_Segments =
+        
+        purrr::map(
+          
+          !!source_col,
+          
+          ~ extract_segments(
+            .x,
+            all_patterns_chr
+          )
+          
+        )
+      
     )
   
 }
@@ -5237,6 +6340,233 @@ transform_to_filtered_patterns <- function(
         }
         
       )
+      
+    )
+  
+}
+transform_to_flag_complex_results <- function(
+    .data,
+    result_dimensions_col = "Result_Dimensions",
+    dimension_text_col = "Dimension_Text",
+    multi_dimension_patterns_chr = c(
+      "QALY; DALY",
+      "QALY; PSP",
+      "QALY; RELAPSE",
+      "DALY; MDE_DAY"
+    ),
+    horizon_patterns_ls = list(
+      `3-month` = c(
+        "3-month",
+        "3 month"
+      ),
+      `6-month` = c(
+        "6mth",
+        "6-month",
+        "6 month"
+      ),
+      `1-year` = c(
+        "1 year",
+        "1-year",
+        "1yr",
+        "1 yr"
+      ),
+      `31-year` = c(
+        "31 year",
+        "31-year"
+      )
+    ),
+    subgroup_patterns_ls = list(
+      Distress = c(
+        "high distress",
+        "low distress"
+      )
+    )) {
+  
+  result_dimensions_col <-
+    rlang::ensym(
+      result_dimensions_col
+    )
+  
+  dimension_text_col <-
+    rlang::ensym(
+      dimension_text_col
+    )
+  
+  horizon_patterns_chr <-
+    
+    unique(
+      
+      unlist(
+        horizon_patterns_ls,
+        use.names = FALSE
+      )
+      
+    )
+  
+  subgroup_patterns_chr <-
+    
+    unique(
+      
+      unlist(
+        subgroup_patterns_ls,
+        use.names = FALSE
+      )
+      
+    )
+  
+  horizon_regex_chr <-
+    
+    paste(
+      horizon_patterns_chr,
+      collapse = "|"
+    )
+  
+  subgroup_regex_chr <-
+    
+    paste(
+      subgroup_patterns_chr,
+      collapse = "|"
+    )
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      Multi_Dimension_Result =
+        
+        as.character(
+          !!result_dimensions_col
+        ) %in%
+        
+        multi_dimension_patterns_chr,
+      
+      Has_Multiple_Horizons =
+        
+        stringr::str_count(
+          
+          stringr::str_to_lower(
+            
+            as.character(
+              !!dimension_text_col
+            )
+            
+          ),
+          
+          stringr::regex(
+            horizon_regex_chr,
+            ignore_case = TRUE
+          )
+          
+        ) > 1,
+      
+      Needs_Horizon_Expansion =
+        
+        Has_Multiple_Horizons,
+      
+      Needs_Subgroup_Expansion =
+        
+        stringr::str_count(
+          
+          stringr::str_to_lower(
+            
+            as.character(
+              !!dimension_text_col
+            )
+            
+          ),
+          
+          stringr::regex(
+            subgroup_regex_chr,
+            ignore_case = TRUE
+          )
+          
+        ) > 1
+      
+    )
+  
+}
+transform_to_normalize_time_horizons <- function(
+    .data,
+    source_col = "Time_Horizon",
+    horizon_patterns_ls) {
+  
+  source_col <- rlang::ensym(
+    source_col
+  )
+  
+  normalize_horizon <- function(
+    value_chr,
+    horizon_patterns_ls) {
+    
+    if (
+      is.na(value_chr)
+    ) {
+      
+      return(
+        NA_character_
+      )
+      
+    }
+    
+    value_std_chr <-
+      
+      stringr::str_to_lower(
+        stringr::str_squish(
+          value_chr
+        )
+      )
+    
+    for (
+      canonical_chr in names(
+        horizon_patterns_ls
+      )
+    ) {
+      
+      variants_chr <-
+        
+        stringr::str_to_lower(
+          
+          stringr::str_squish(
+            
+            horizon_patterns_ls[[canonical_chr]]
+            
+          )
+          
+        )
+      
+      if (
+        value_std_chr %in%
+        variants_chr
+      ) {
+        
+        return(
+          canonical_chr
+        )
+        
+      }
+      
+    }
+    
+    value_chr
+    
+  }
+  
+  .data %>%
+    
+    dplyr::mutate(
+      
+      !!source_col :=
+        
+        purrr::map_chr(
+          
+          !!source_col,
+          
+          ~ normalize_horizon(
+            .x,
+            horizon_patterns_ls
+          )
+          
+        )
       
     )
   
