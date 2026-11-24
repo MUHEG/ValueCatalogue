@@ -298,24 +298,29 @@ processed_tb <- processed_tb %>%
 
   dplyr::mutate(
 
-    Needs_Perspective_Expansion =
+Needs_Perspective_Expansion =
 
-      stringr::str_detect(
+  stringr::str_detect(
+    CE_Results_Raw,
+    stringr::regex(
+      "Healthcare perspective:",
+      ignore_case = TRUE
+    )
+  ) &
 
-        CE_Results_Raw,
-
-        stringr::regex(
-
-          "Healthcare perspective:[\\s\\S]*?Societal perspective:",
-
-          ignore_case = TRUE
-
-        )
-
-      )
+  stringr::str_detect(
+    CE_Results_Raw,
+    stringr::regex(
+      "Societal perspective:",
+      ignore_case = TRUE
+    )
+  )
 
   )
 ```
+
+
+
 
 ```{r}
 perspective_expanded_tb <-
