@@ -27,7 +27,14 @@ processed_tb <- raw_data_ls$summary %>%
                      dplyr::select(c("paper_id", "Comparator_Ext", "Population extract",
                                      "Diagnosis", "Setting", "Setting_Category",
                                      "Results", "No. intervention evaluated")) %>%
-                     dplyr::rename(Paper_id = "paper_id"))
+                     dplyr::rename(Paper_id = "paper_id")) %>%
+
+  dplyr::mutate(
+
+    Study_Perspective =
+      Perspective
+
+  )
 
 ```
 
@@ -69,6 +76,51 @@ ce_perspectives_ls <- list(
 
 )
 ```
+
+```{r}
+perspective_normalization_ls <-
+
+  lapply(
+
+    ce_perspectives_ls,
+
+    function(x) {
+
+      stringr::str_remove_all(
+        x,
+        ":"
+      )
+
+    }
+
+  )
+perspective_normalization_ls$Healthcare <-
+
+  c(
+
+    perspective_normalization_ls$Healthcare,
+
+    "Healthcare",
+
+    "Healthcare (assumed)"
+
+  )
+
+perspective_normalization_ls$Societal <-
+
+  c(
+
+    perspective_normalization_ls$Societal,
+
+    "Societal",
+
+    "Partial societal"
+
+  )
+
+```
+
+
 
 ```{r}
 statistic_patterns_ls <- list(
@@ -240,13 +292,133 @@ processed_tb <- processed_tb %>%
   )
 ```
 
+
+```{r}
+processed_tb <- processed_tb %>%
+
+  dplyr::mutate(
+
+    Needs_Perspective_Expansion =
+
+      stringr::str_detect(
+
+        CE_Results_Raw,
+
+        stringr::regex(
+
+          "Healthcare perspective:[\\s\\S]*?Societal perspective:",
+
+          ignore_case = TRUE
+
+        )
+
+      )
+
+  )
+```
+
+```{r}
+perspective_expanded_tb <-
+
+  processed_tb %>%
+
+  dplyr::filter(
+    Needs_Perspective_Expansion
+  )
+```
+
+```{r}
+healthcare_tb <-
+
+  perspective_expanded_tb %>%
+
+  dplyr::mutate(
+
+    Result_Perspective =
+      "Healthcare",
+
+    CE_Results_Raw =
+
+      stringr::str_trim(
+
+        stringr::str_match(
+
+          CE_Results_Raw,
+
+          stringr::regex(
+
+            "Healthcare perspective:(.*?)Societal perspective:",
+
+            ignore_case = TRUE
+
+          )
+
+        )[, 2]
+
+      )
+
+  )
+```
+
+```{r}
+societal_tb <-
+
+  perspective_expanded_tb %>%
+
+  dplyr::mutate(
+
+    Result_Perspective =
+      "Societal",
+
+    CE_Results_Raw =
+
+      stringr::str_trim(
+
+        stringr::str_match(
+
+          CE_Results_Raw,
+
+          stringr::regex(
+
+            "Societal perspective:(.*)$",
+
+            ignore_case = TRUE
+
+          )
+
+        )[, 2]
+
+      )
+
+  )
+```
+
+```{r}
+processed_tb <-
+
+  dplyr::bind_rows(
+
+    processed_tb %>%
+
+      dplyr::filter(
+        !Needs_Perspective_Expansion
+      ),
+
+    healthcare_tb,
+
+    societal_tb
+
+  )
+```
+
+
 ```{r}
 processed_tb <- processed_tb %>%
 
   transform_to_expand_numbered_items(
 
     source_col =
-      `Cost-effectiveness outcomes (in 2024 AUD)`,
+      CE_Results_Raw,
 
     item_nbr_col =
       "CE_Item_Nbr",
@@ -282,7 +454,7 @@ processed_tb <- processed_tb  %>%
       ce_perspectives_ls,
 
     perspective_col =
-      "Perspective",
+      "Result_Perspective",
 
     original_text_col =
       "CE_Item_Text_Original",
@@ -292,6 +464,8 @@ processed_tb <- processed_tb  %>%
 
   )
 ```
+
+
 
 ```{r}
 nrow(processed_tb)
@@ -824,6 +998,102 @@ final_normalized_tb <- final_normalized_tb %>%
 
   )
 ```
+```{r}
+final_normalized_tb <-
+
+  final_normalized_tb %>%
+
+  dplyr::mutate(
+
+    Final_Perspective =
+
+      dplyr::coalesce(
+
+        Result_Perspective,
+
+        Study_Perspective
+
+      )
+
+  )
+```
+
+```{r}
+final_normalized_tb <-
+
+  final_normalized_tb %>%
+
+  dplyr::mutate(
+
+    Normalized_Perspective =
+
+      purrr::pmap_chr(
+
+        list(Final_Perspective),
+
+        function(x) {
+
+          perspectives_chr <- character()
+
+          if (
+            stringr::str_detect(
+              stringr::str_to_lower(x),
+              "health"
+            )
+          ) {
+
+            perspectives_chr <-
+              c(
+                perspectives_chr,
+                "Healthcare"
+              )
+
+          }
+
+          if (
+            stringr::str_detect(
+              stringr::str_to_lower(x),
+              "societal"
+            )
+          ) {
+
+            perspectives_chr <-
+              c(
+                perspectives_chr,
+                "Societal"
+              )
+
+          }
+
+          if (
+            stringr::str_detect(
+              stringr::str_to_lower(x),
+              "payer"
+            )
+          ) {
+
+            perspectives_chr <-
+              c(
+                perspectives_chr,
+                "Payer"
+              )
+
+          }
+
+          paste(
+            unique(
+              perspectives_chr
+            ),
+            collapse = "; "
+          )
+
+        }
+
+      )
+
+  )
+```
+
 
 
 ### QA diagnostics

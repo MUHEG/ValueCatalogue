@@ -3055,6 +3055,12 @@ transform_to_extract_ce_perspective <- function(
     perspective_col
   )
   
+  perspective_col_chr <-
+    
+    rlang::as_string(
+      perspective_col
+    )
+  
   if (!is.null(
     original_text_col
   )) {
@@ -3075,6 +3081,26 @@ transform_to_extract_ce_perspective <- function(
     
   }
   
+  existing_perspective_chr <-
+    
+    if (
+      perspective_col_chr %in%
+      names(.data)
+    ) {
+      
+      as.character(
+        .data[[perspective_col_chr]]
+      )
+      
+    } else {
+      
+      rep(
+        NA_character_,
+        nrow(.data)
+      )
+      
+    }
+  
   outp_tb <- .data %>%
     
     dplyr::mutate(
@@ -3086,9 +3112,11 @@ transform_to_extract_ce_perspective <- function(
         ),
       
       .perspective_chr =
-        NA_character_,
+        
+        existing_perspective_chr,
       
       .matched_pattern_chr =
+        
         NA_character_
       
     )
@@ -3114,15 +3142,19 @@ transform_to_extract_ce_perspective <- function(
         stringr::str_detect(
           
           string =
+            
             stringr::str_to_lower(
               outp_tb$.working_chr
             ),
           
           pattern =
+            
             stringr::fixed(
+              
               stringr::str_to_lower(
                 pattern_chr
               )
+              
             )
           
         )
@@ -3197,7 +3229,9 @@ transform_to_extract_ce_perspective <- function(
           ) {
             
             if (
-              !is.na(pattern_chr)
+              !is.na(
+                pattern_chr
+              )
             ) {
               
               text_chr <-
@@ -3205,14 +3239,19 @@ transform_to_extract_ce_perspective <- function(
                 stringr::str_remove(
                   
                   string =
+                    
                     stringr::str_trim(
                       text_chr
                     ),
                   
                   pattern =
+                    
                     stringr::fixed(
+                      
                       pattern_chr,
+                      
                       ignore_case = TRUE
+                      
                     )
                   
                 )
