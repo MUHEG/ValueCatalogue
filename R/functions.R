@@ -339,6 +339,134 @@ get_perspective_blocks <- function(
   )
   
 }
+get_study_perspective_blocks <- function(
+    perspective_chr,
+    perspective_normalization_ls
+) {
+  
+  if (
+    length(perspective_chr) == 0 ||
+    is.null(perspective_chr) ||
+    all(is.na(perspective_chr))
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        Expanded_Perspective =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  perspective_chr <-
+    
+    as.character(
+      perspective_chr
+    )
+  
+  expanded_chr <-
+    
+    perspective_chr %>%
+    
+    stringr::str_split(
+      "\\r\\n|\\n|;"
+    ) %>%
+    
+    purrr::pluck(1) %>%
+    
+    stringr::str_trim()
+  
+  expanded_chr <-
+    
+    expanded_chr[
+      expanded_chr != ""
+    ]
+  
+  if (
+    length(expanded_chr) == 0
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        Expanded_Perspective =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  expanded_chr <-
+    
+    purrr::map_chr(
+      
+      expanded_chr,
+      
+      function(
+    x
+      ) {
+        
+        matched_perspective_chr <-
+          
+          names(
+            
+            purrr::keep(
+              
+              perspective_normalization_ls,
+              
+              ~ any(
+                
+                stringr::str_to_lower(
+                  x
+                ) ==
+                  
+                  stringr::str_to_lower(
+                    .x
+                  )
+                
+              )
+              
+            )
+            
+          )
+        
+        if (
+          length(
+            matched_perspective_chr
+          ) > 0
+        ) {
+          
+          matched_perspective_chr[1]
+          
+        } else {
+          
+          x
+          
+        }
+        
+      }
+    
+    )
+  
+  tibble::tibble(
+    
+    Expanded_Perspective =
+      
+      unique(
+        expanded_chr
+      )
+    
+  )
+  
+}
 get_variant_segment <- function(
     text_chr,
     category_chr,
@@ -2851,6 +2979,127 @@ transform_to_expand_result_dimensions <- function(
     dplyr::select(
       -.dimension_ls
     )
+  
+}
+transform_to_expand_study_perspectives <- function(
+    .data,
+    perspective_col = "Result_Perspective",
+    source_perspective_col =
+      "Study_Perspective",
+    perspective_normalization_ls
+) {
+  
+  perspective_col <-
+    rlang::ensym(
+      perspective_col
+    )
+  
+  source_perspective_col <-
+    rlang::ensym(
+      source_perspective_col
+    )
+  
+  rows_to_expand_tb <-
+    
+    .data %>%
+    
+    dplyr::filter(
+      
+      is.na(
+        !!perspective_col
+      )
+      
+    ) %>%
+    
+    dplyr::filter(
+      
+      !is.na(
+        !!source_perspective_col
+      )
+      
+    ) %>%
+    
+    dplyr::filter(
+      
+      stringr::str_detect(
+        
+        as.character(
+          !!source_perspective_col
+        ),
+        
+        "\\r\\n|\\n|;"
+        
+      )
+      
+    )
+  
+  rows_not_to_expand_tb <-
+    
+    dplyr::anti_join(
+      
+      .data,
+      
+      rows_to_expand_tb,
+      
+      by = names(.data)
+      
+    )
+  
+  rows_to_expand_tb <-
+    
+    rows_to_expand_tb %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      .expanded_perspectives =
+        
+        list(
+          
+          get_study_perspective_blocks(
+            
+            perspective_chr =
+              
+              as.character(
+                !!source_perspective_col
+              ),
+            
+            perspective_normalization_ls =
+              
+              perspective_normalization_ls
+            
+          )
+          
+        )
+      
+    ) %>%
+    
+    tidyr::unnest(
+      .expanded_perspectives
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::mutate(
+      
+      !!perspective_col :=
+        
+        Expanded_Perspective
+      
+    ) %>%
+    
+    dplyr::select(
+      -Expanded_Perspective
+    )
+  
+  dplyr::bind_rows(
+    
+    rows_not_to_expand_tb,
+    
+    rows_to_expand_tb
+    
+  )
   
 }
 transform_to_expand_temporal_results <- function(

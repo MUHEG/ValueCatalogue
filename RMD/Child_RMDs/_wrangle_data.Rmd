@@ -900,6 +900,26 @@ final_normalized_tb <- final_normalized_tb %>%
 
   )
 ```
+
+```{r}
+final_normalized_tb <-
+
+  final_normalized_tb %>%
+
+  transform_to_expand_study_perspectives(
+
+    perspective_col =
+      "Result_Perspective",
+
+    source_perspective_col =
+      "Study_Perspective",
+    
+    perspective_normalization_ls =
+      perspective_normalization_ls
+
+  )
+```
+
 ```{r}
 final_normalized_tb <-
 
@@ -996,6 +1016,10 @@ final_normalized_tb <-
   )
 ```
 
+
+
+
+
 ```{r}
 final_normalized_tb <- final_normalized_tb %>%
 
@@ -1022,20 +1046,7 @@ final_normalized_tb <- final_normalized_tb %>%
 
 
 
-Review uncovered outcome dimensions
-- suicide attempt prevented
-- NSSI episode prevented
 
-Multi-dimension ICER expansion
-
-Paper 538
-
-Dimensions:
-- Suicide attempt prevented
-- NSSI episode prevented
-- ED visit avoided
-- Psychiatric ...
-<!-- - ED visit avoided -->
 
 ### QA diagnostics
 
@@ -1124,5 +1135,53 @@ final_normalized_tb %>%
 ```
 
 
+### For the future
+
+Review uncovered outcome dimensions
+- suicide attempt prevented
+- NSSI episode prevented
+
+Multi-dimension ICER expansion
+
+Paper 538
+
+Dimensions:
+- Suicide attempt prevented
+- NSSI episode prevented
+- ED visit avoided
+- Psychiatric ...
+<!-- - ED visit avoided -->
+
+```{r}
+candidate_result_dimensions_ls <- list(
+
+  SUICIDE_ATTEMPT = c(
+    "suicide attempt prevented",
+    "suicide attempts prevented"
+  ),
+
+  NSSI_EPISODE = c(
+    "nssi episode prevented",
+    "nssi episodes prevented",
+    "non-suicidal self-injury episodes prevented"
+  ),
+
+  ED_VISIT = c(
+    "ed visit avoided",
+    "ed visits avoided"
+  ),
+
+  PSYCHIATRIC_ADMISSION = c(
+    "psychiatric admission avoided",
+    "psychiatric admissions avoided"
+  ),
+
+  PSYCHIATRIC_INPATIENT_DAY = c(
+    "psychiatric inpatient day avoided",
+    "psychiatric inpatient days avoided"
+  )
+
+)
+```
 
 
