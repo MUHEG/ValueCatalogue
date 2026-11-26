@@ -42,7 +42,7 @@ processed_tb <- raw_data_ls$summary %>%
 ### Define dataset patterns
 
 ```{r}
-ce_perspectives_ls <- list(
+perspective_patterns_ls <- list(
 
   Healthcare = c(
 
@@ -82,7 +82,7 @@ perspective_normalization_ls <-
 
   lapply(
 
-    ce_perspectives_ls,
+    perspective_patterns_ls,
 
     function(x) {
 
@@ -292,126 +292,22 @@ processed_tb <- processed_tb %>%
   )
 ```
 
+### Expand multi-perspective result blocks before numbered-item expansion.
+### Preserves Perspective → Intervention hierarchy (e.g. Papers 434, 462, 549).
 
 ```{r}
 processed_tb <- processed_tb %>%
 
-  dplyr::mutate(
+  transform_to_expand_perspectives(
 
-Needs_Perspective_Expansion =
+    source_col =
+      CE_Results_Raw,
 
-  stringr::str_detect(
-    CE_Results_Raw,
-    stringr::regex(
-      "Healthcare perspective:",
-      ignore_case = TRUE
-    )
-  ) &
+    perspective_patterns_ls =
+      perspective_patterns_ls,
 
-  stringr::str_detect(
-    CE_Results_Raw,
-    stringr::regex(
-      "Societal perspective:",
-      ignore_case = TRUE
-    )
-  )
-
-  )
-```
-
-
-
-
-```{r}
-perspective_expanded_tb <-
-
-  processed_tb %>%
-
-  dplyr::filter(
-    Needs_Perspective_Expansion
-  )
-```
-
-```{r}
-healthcare_tb <-
-
-  perspective_expanded_tb %>%
-
-  dplyr::mutate(
-
-    Result_Perspective =
-      "Healthcare",
-
-    CE_Results_Raw =
-
-      stringr::str_trim(
-
-        stringr::str_match(
-
-          CE_Results_Raw,
-
-          stringr::regex(
-
-            "Healthcare perspective:(.*?)Societal perspective:",
-
-            ignore_case = TRUE
-
-          )
-
-        )[, 2]
-
-      )
-
-  )
-```
-
-```{r}
-societal_tb <-
-
-  perspective_expanded_tb %>%
-
-  dplyr::mutate(
-
-    Result_Perspective =
-      "Societal",
-
-    CE_Results_Raw =
-
-      stringr::str_trim(
-
-        stringr::str_match(
-
-          CE_Results_Raw,
-
-          stringr::regex(
-
-            "Societal perspective:(.*)$",
-
-            ignore_case = TRUE
-
-          )
-
-        )[, 2]
-
-      )
-
-  )
-```
-
-```{r}
-processed_tb <-
-
-  dplyr::bind_rows(
-
-    processed_tb %>%
-
-      dplyr::filter(
-        !Needs_Perspective_Expansion
-      ),
-
-    healthcare_tb,
-
-    societal_tb
+    perspective_col =
+      "Result_Perspective"
 
   )
 ```
@@ -447,6 +343,7 @@ processed_tb <- processed_tb %>%
 ```
 
 
+
 ```{r}
 processed_tb <- processed_tb  %>%
 
@@ -456,7 +353,7 @@ processed_tb <- processed_tb  %>%
       CE_Item_Text,
 
     variants_ls =
-      ce_perspectives_ls,
+      perspective_patterns_ls,
 
     perspective_col =
       "Result_Perspective",
@@ -507,7 +404,7 @@ processed_tb <- processed_tb  %>%
       CE_Item_Text,
 
     variants_ls =
-      ce_perspectives_ls
+      perspective_patterns_ls
 
   )
 ```

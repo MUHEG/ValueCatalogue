@@ -1,4 +1,344 @@
 # Functions go here prior to export to libraries
+get_nested_patterns <- function(
+    patterns_chr
+) {
+  
+  expand.grid(
+    
+    Parent = patterns_chr,
+    Child = patterns_chr,
+    
+    stringsAsFactors = FALSE
+    
+  ) %>%
+    
+    dplyr::filter(
+      Parent != Child
+    ) %>%
+    
+    dplyr::filter(
+      
+      stringr::str_detect(
+        
+        string =
+          stringr::str_to_lower(
+            Parent
+          ),
+        
+        pattern =
+          stringr::fixed(
+            stringr::str_to_lower(
+              Child
+            )
+          )
+        
+      )
+      
+    )
+  
+}
+get_perspective_blocks <- function(
+    text_chr,
+    perspective_patterns_ls) {
+  
+  perspective_patterns_ls <-
+    
+    update_to_normalized_list(
+      perspective_patterns_ls
+    )
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        .Perspective =
+          NA_character_,
+        
+        .Text =
+          text_chr
+        
+      )
+      
+    )
+    
+  }
+  
+  positions_tb <-
+    
+    purrr::imap_dfr(
+      
+      perspective_patterns_ls,
+      
+      function(
+    patterns_chr,
+    perspective_chr
+      ) {
+        
+        purrr::map_dfr(
+          
+          patterns_chr,
+          
+          function(
+    pattern_chr
+          ) {
+            
+            loc_mat <-
+              
+              stringr::str_locate(
+                
+                text_chr,
+                
+                stringr::fixed(
+                  
+                  pattern_chr,
+                  
+                  ignore_case = TRUE
+                  
+                )
+                
+              )
+            
+            if (
+              is.na(
+                loc_mat[1, 1]
+              )
+            ) {
+              
+              return(
+                tibble::tibble()
+              )
+              
+            }
+            
+            tibble::tibble(
+              
+              .Perspective =
+                perspective_chr,
+              
+              .Pattern =
+                pattern_chr,
+              
+              Start =
+                loc_mat[1, 1],
+              
+              End =
+                loc_mat[1, 2]
+              
+            )
+            
+          }
+    
+        )
+        
+      }
+    
+    )
+  
+  if (
+    nrow(
+      positions_tb
+    ) == 0
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        .Perspective =
+          NA_character_,
+        
+        .Text =
+          text_chr
+        
+      )
+      
+    )
+    
+  }
+  
+  positions_tb <-
+    
+    positions_tb %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      Is_Nested =
+        
+        any(
+          
+          Start >= positions_tb$Start &
+            End <= positions_tb$End &
+            
+            (
+              Start != positions_tb$Start |
+                End != positions_tb$End
+            )
+          
+        )
+      
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::filter(
+      !Is_Nested
+    ) %>%
+    
+    dplyr::arrange(
+      Start
+    )
+  
+  # NEW: capture shared preamble
+  
+  shared_preamble_chr <-
+    
+    if (
+      positions_tb$Start[1] > 1
+    ) {
+      
+      stringr::str_squish(
+        
+        stringr::str_sub(
+          
+          text_chr,
+          
+          1,
+          
+          positions_tb$Start[1] - 1
+          
+        )
+        
+      )
+      
+    } else {
+      
+      ""
+      
+    }
+  
+  positions_tb <-
+    
+    positions_tb %>%
+    
+    dplyr::mutate(
+      
+      Block_End =
+        
+        dplyr::lead(
+          Start
+        ) - 1
+      
+    )
+  
+  positions_tb$Block_End[
+    nrow(
+      positions_tb
+    )
+  ] <-
+    
+    nchar(
+      text_chr
+    )
+  
+  purrr::pmap_dfr(
+    
+    positions_tb,
+    
+    function(
+    
+      .Perspective,
+      .Pattern,
+      Start,
+      End,
+      Is_Nested,
+      Block_End
+      
+    ) {
+      
+      block_chr <-
+        
+        stringr::str_sub(
+          
+          text_chr,
+          
+          Start,
+          
+          Block_End
+          
+        )
+      
+      block_chr <-
+        
+        stringr::str_remove(
+          
+          block_chr,
+          
+          stringr::fixed(
+            
+            .Pattern,
+            
+            ignore_case = TRUE
+            
+          )
+          
+        )
+      
+      block_chr <-
+        
+        stringr::str_remove(
+          
+          block_chr,
+          
+          "\\([0-9]+\\)\\s*$"
+          
+        )
+      
+      # NEW: prepend shared preamble
+      
+      if (
+        nchar(
+          shared_preamble_chr
+        ) > 0
+      ) {
+        
+        block_chr <-
+          
+          paste(
+            
+            shared_preamble_chr,
+            
+            block_chr,
+            
+            sep = " "
+            
+          )
+        
+      }
+      
+      tibble::tibble(
+        
+        .Perspective =
+          .Perspective,
+        
+        .Text =
+          
+          stringr::str_squish(
+            block_chr
+          )
+        
+      )
+      
+    }
+    
+  )
+  
+}
 get_variant_segment <- function(
     text_chr,
     category_chr,
@@ -2398,6 +2738,65 @@ transform_to_expand_numbered_items <- function(
           ".original_text_chr"
         )
       )
+      
+    )
+  
+}
+transform_to_expand_perspectives <- function(
+    .data,
+    source_col,
+    perspective_patterns_ls,
+    perspective_col = "Result_Perspective") {
+  
+  source_col <- rlang::ensym(source_col)
+  perspective_col <- rlang::ensym(perspective_col)
+  
+  .data %>%
+    
+    dplyr::rowwise() %>%
+    
+    dplyr::mutate(
+      
+      .perspective_blocks =
+        
+        list(
+          
+          get_perspective_blocks(
+            
+            text_chr =
+              as.character(
+                !!source_col
+              ),
+            
+            perspective_patterns_ls =
+              perspective_patterns_ls
+            
+          )
+          
+        )
+      
+    ) %>%
+    
+    tidyr::unnest(
+      .perspective_blocks
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::mutate(
+      
+      !!perspective_col :=
+        .Perspective,
+      
+      !!source_col :=
+        .Text
+      
+    ) %>%
+    
+    dplyr::select(
+      
+      -.Perspective,
+      -.Text
       
     )
   
@@ -6928,5 +7327,64 @@ transform_to_split_cols <- function(.data,
       )
     ) %>%
     dplyr::select(-.split)
+  
+}
+update_to_normalized_list <- function(
+    patterns_ls
+) {
+  
+  purrr::map(
+    
+    patterns_ls,
+    
+    function(patterns_chr) {
+      
+      patterns_chr %>%
+        
+        unique() %>%
+        
+        .[
+          
+          order(
+            nchar(.),
+            decreasing = TRUE
+          )
+          
+        ]
+      
+    }
+    
+  )
+  
+}
+validate_pattern_list <- function(
+    patterns_ls
+) {
+  
+  purrr::imap_dfr(
+    
+    patterns_ls,
+    
+    function(
+    patterns_chr,
+    group_chr
+    ) {
+      
+      get_nested_patterns(
+        patterns_chr
+      ) %>%
+        
+        dplyr::mutate(
+          
+          Pattern_Group =
+            group_chr,
+          
+          .before = 1
+          
+        )
+      
+    }
+    
+  )
   
 }
