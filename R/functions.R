@@ -2803,7 +2803,7 @@ transform_to_expand_perspectives <- function(
 }
 transform_to_expand_result_dimensions <- function(
     .data,
-    source_col = Result_Dimensions,
+    source_col = Detected_Result_Dimensions,
     output_col = "Result_Dimension") {
   
   source_col <- rlang::ensym(
@@ -4932,7 +4932,7 @@ transform_to_extract_result_dimensions <- function(
     .data,
     source_cols,
     result_dimension_patterns_ls,
-    output_col = "Result_Dimensions") {
+    output_col = "Detected_Result_Dimensions") {
   
   output_col <- rlang::sym(
     output_col
@@ -6784,7 +6784,7 @@ transform_to_filtered_patterns <- function(
 }
 transform_to_flag_complex_results <- function(
     .data,
-    result_dimensions_col = "Result_Dimensions",
+    result_dimensions_col = "Detected_Result_Dimensions",
     dimension_text_col = "Dimension_Text",
     multi_dimension_patterns_chr = c(
       "QALY; DALY",

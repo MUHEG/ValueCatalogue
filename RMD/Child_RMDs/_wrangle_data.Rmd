@@ -467,7 +467,7 @@ processed_tb <- processed_tb %>%
       result_dimension_patterns_ls,
 
     output_col =
-      "Result_Dimensions"
+      "Detected_Result_Dimensions"
 
   )
 ```
@@ -482,7 +482,7 @@ processed_tb <- processed_tb %>%
   transform_to_expand_result_dimensions(
 
     source_col =
-      Result_Dimensions,
+      Detected_Result_Dimensions,
 
     output_col =
       "Result_Dimension"
@@ -996,7 +996,46 @@ final_normalized_tb <-
   )
 ```
 
+```{r}
+final_normalized_tb <- final_normalized_tb %>%
 
+  dplyr::mutate(
+
+    Result_Dimension =
+
+      dplyr::if_else(
+
+        Statistic_Type %in% c(
+          "INMB",
+          "NMB",
+          "ROI"
+        ),
+
+        NA_character_,
+
+        Result_Dimension
+
+      )
+
+  )
+```
+
+
+
+Review uncovered outcome dimensions
+- suicide attempt prevented
+- NSSI episode prevented
+
+Multi-dimension ICER expansion
+
+Paper 538
+
+Dimensions:
+- Suicide attempt prevented
+- NSSI episode prevented
+- ED visit avoided
+- Psychiatric ...
+<!-- - ED visit avoided -->
 
 ### QA diagnostics
 
