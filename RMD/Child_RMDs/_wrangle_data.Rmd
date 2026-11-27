@@ -546,6 +546,15 @@ processed_tb <- processed_tb %>%
 ```
 
 ```{r}
+validate_logical_flags(processed_tb$Needs_Horizon_Expansion,
+                       flag_name_chr = "Needs_Horizon_Expansion")
+validate_logical_flags(processed_tb$Needs_Subgroup_Expansion,
+                       flag_name_chr = "Needs_Subgroup_Expansion")
+```
+
+
+
+```{r}
 processed_tb <- processed_tb %>%
 
   transform_to_extract_point_estimate_text(
@@ -735,9 +744,13 @@ normalized_tb <-
   dplyr::bind_rows(
 
     processed_tb %>%
-      dplyr::filter(
-        !Needs_Horizon_Expansion
-      ),
+
+  dplyr::filter(
+    dplyr::coalesce(
+      Needs_Horizon_Expansion,
+      FALSE
+    ) == FALSE
+  ),
 
     temporal_expanded_tb
 
@@ -1016,10 +1029,6 @@ final_normalized_tb <-
   )
 ```
 
-
-
-
-
 ```{r}
 final_normalized_tb <- final_normalized_tb %>%
 
@@ -1045,6 +1054,43 @@ final_normalized_tb <- final_normalized_tb %>%
 ```
 
 
+```{r}
+final_normalized_tb <-
+
+  final_normalized_tb %>%
+
+  dplyr::mutate(
+
+    Statistic_Type =
+
+      dplyr::case_when(
+
+        is.na(
+          Statistic_Type
+        ) &
+
+        `Evaluation methods` == "CEA" &
+
+        Final_Result_Status == "Numeric"
+
+        ~
+
+        "ICER",
+
+        TRUE ~
+
+        Statistic_Type
+
+      )
+
+  )
+```
+
+
+
+```{r}
+validate_pipeline_regression()
+```
 
 
 
@@ -1185,3 +1231,11 @@ candidate_result_dimensions_ls <- list(
 ```
 
 
+Also...build validate_ce_completeness() function to check:
+
+Flag, Trigger
+Missing_ICER_Value, 	CEA/CUA but no ICER extracted
+Outcome_Not_Represented,	Outcome text mentions measures not mapped to dimensions
+Multi_Perspective_Underreported,	Perspectives mentioned but only one result extracted
+Unexpected_Dimension_Count,	Multiple outcome measures but one CE result
+Potential_Missing_Extraction,	Study reports richer outcomes than extraction suggests

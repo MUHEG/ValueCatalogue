@@ -1,4 +1,909 @@
 # Functions go here prior to export to libraries
+add_prefix_text <- function(
+    extracted_chr,
+    prefix_chr
+) {
+  
+  if (
+    is.na(extracted_chr) ||
+    extracted_chr == ""
+  ) {
+    
+    return(
+      extracted_chr
+    )
+    
+  }
+  
+  if (
+    is.na(prefix_chr)
+  ) {
+    
+    return(
+      extracted_chr
+    )
+    
+  }
+  
+  if (
+    
+    stringr::str_starts(
+      
+      extracted_chr,
+      
+      stringr::fixed(
+        prefix_chr
+      )
+      
+    )
+    
+  ) {
+    
+    return(
+      extracted_chr
+    )
+    
+  }
+  
+  stringr::str_squish(
+    
+    paste(
+      prefix_chr,
+      extracted_chr
+    )
+    
+  )
+  
+}
+get_clean_temporal_segment <- function(
+    text_chr
+) {
+  
+  out_chr <-
+    
+    text_chr %>%
+    
+    stringr::str_remove(
+      ";\\s*$"
+    ) %>%
+    
+    stringr::str_squish()
+  
+  out_chr[
+    is.na(text_chr)
+  ] <- NA_character_
+  
+  out_chr
+  
+}
+get_confidence_interval <- function(
+    text_chr
+) {
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      
+      list(
+        
+        lower =
+          NA_character_,
+        
+        upper =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  ci_chr <-
+    
+    stringr::str_extract(
+      
+      text_chr,
+      
+      stringr::regex(
+        
+        "\\((95\\s*%?\\s*(CI|UI).*?)\\)",
+        
+        ignore_case = TRUE
+        
+      )
+      
+    )
+  
+  if (
+    is.na(ci_chr)
+  ) {
+    
+    return(
+      
+      list(
+        
+        lower =
+          NA_character_,
+        
+        upper =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  ci_chr <-
+    
+    stringr::str_remove_all(
+      ci_chr,
+      "^\\(|\\)$"
+    )
+  
+  ci_chr <-
+    
+    stringr::str_remove(
+      
+      ci_chr,
+      
+      stringr::regex(
+        "^95\\s*%?\\s*(CI|UI)\\s*:?\\s*",
+        ignore_case = TRUE
+      )
+      
+    )
+  
+  bounds_chr <-
+    
+    stringr::str_split(
+      
+      ci_chr,
+      
+      stringr::regex(
+        "\\s+to\\s+",
+        ignore_case = TRUE
+      )
+      
+    )[[1]]
+  
+  if (
+    length(bounds_chr) != 2
+  ) {
+    
+    return(
+      
+      list(
+        
+        lower =
+          NA_character_,
+        
+        upper =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  list(
+    
+    lower =
+      
+      stringr::str_squish(
+        bounds_chr[1]
+      ),
+    
+    upper =
+      
+      stringr::str_squish(
+        bounds_chr[2]
+      )
+    
+  )
+  
+}
+get_detected_dimensions <- function(
+    text_chr,
+    result_dimension_patterns_ls
+) {
+  
+  if (
+    is.na(text_chr) ||
+    text_chr == ""
+  ) {
+    
+    return(
+      NA_character_
+    )
+    
+  }
+  
+  text_chr <-
+    
+    stringr::str_to_lower(
+      text_chr
+    )
+  
+  detected_chr <- character()
+  
+  for (
+    
+    dimension_chr in
+    names(
+      result_dimension_patterns_ls
+    )
+    
+  ) {
+    
+    matched_lgl <-
+      
+      purrr::some(
+        
+        result_dimension_patterns_ls[[dimension_chr]],
+        
+        function(
+    pattern_chr
+        ) {
+          
+          stringr::str_detect(
+            
+            text_chr,
+            
+            stringr::fixed(
+              
+              stringr::str_to_lower(
+                pattern_chr
+              )
+              
+            )
+            
+          )
+          
+        }
+    
+      )
+    
+    if (
+      matched_lgl
+    ) {
+      
+      detected_chr <-
+        
+        c(
+          detected_chr,
+          dimension_chr
+        )
+      
+    }
+    
+  }
+  
+  detected_chr <-
+    
+    unique(
+      detected_chr
+    )
+  
+  if (
+    length(
+      detected_chr
+    ) == 0
+  ) {
+    
+    return(
+      NA_character_
+    )
+    
+  }
+  
+  paste(
+    detected_chr,
+    collapse = "; "
+  )
+  
+}
+get_dimension_text <- function(
+    statistic_text_chr,
+    dimension_chr) {
+  
+  if (
+    is.na(statistic_text_chr) ||
+    is.na(dimension_chr)
+  ) {
+    
+    return(
+      statistic_text_chr
+    )
+    
+  }
+  
+  text_chr <-
+    
+    stringr::str_squish(
+      statistic_text_chr
+    )
+  
+  prefix_chr <-
+    
+    get_prefix_text(
+      text_chr
+    )
+  
+  if (
+    dimension_chr == "QALY"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*QALY[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  if (
+    dimension_chr == "DALY"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*DALY[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  if (
+    dimension_chr == "PSP"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*PSP[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  if (
+    dimension_chr == "RELAPSE"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*relapse[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  if (
+    dimension_chr == "MDE_DAY"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*MDE day[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  if (
+    dimension_chr == "K10"
+  ) {
+    
+    hit_chr <-
+      
+      stringr::str_extract(
+        
+        text_chr,
+        
+        "[^;&]*K10[^;&]*"
+        
+      )
+    
+    if (
+      !is.na(hit_chr)
+    ) {
+      
+      return(
+        
+        add_prefix_text(
+          
+          extracted_chr =
+            
+            stringr::str_squish(
+              hit_chr
+            ),
+          
+          prefix_chr =
+            prefix_chr
+          
+        )
+        
+      )
+      
+    }
+    
+  }
+  
+  text_chr
+  
+}
+get_normalized_horizon <- function(
+    value_chr,
+    horizon_patterns_ls) {
+  
+  if (
+    is.na(value_chr)
+  ) {
+    
+    return(
+      NA_character_
+    )
+    
+  }
+  
+  value_std_chr <-
+    
+    stringr::str_to_lower(
+      stringr::str_squish(
+        value_chr
+      )
+    )
+  
+  for (
+    canonical_chr in names(
+      horizon_patterns_ls
+    )
+  ) {
+    
+    variants_chr <-
+      
+      stringr::str_to_lower(
+        
+        stringr::str_squish(
+          
+          horizon_patterns_ls[[canonical_chr]]
+          
+        )
+        
+      )
+    
+    if (
+      value_std_chr %in%
+      variants_chr
+    ) {
+      
+      return(
+        canonical_chr
+      )
+      
+    }
+    
+  }
+  
+  value_chr
+  
+}
+get_numeric_result <- function(
+    text_chr
+) {
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      
+      list(
+        
+        status =
+          NA_character_,
+        
+        value =
+          NA_real_,
+        
+        scale =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  text_chr <-
+    
+    stringr::str_squish(
+      text_chr
+    )
+  
+  text_lower_chr <-
+    
+    stringr::str_to_lower(
+      text_chr
+    )
+  
+  if (
+    
+    stringr::str_detect(
+      text_lower_chr,
+      "\\bdominated\\b"
+    )
+    
+  ) {
+    
+    return(
+      
+      list(
+        
+        status =
+          "Dominated",
+        
+        value =
+          NA_real_,
+        
+        scale =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  if (
+    
+    stringr::str_detect(
+      text_lower_chr,
+      "\\bdominant\\b"
+    )
+    
+  ) {
+    
+    return(
+      
+      list(
+        
+        status =
+          "Dominant",
+        
+        value =
+          NA_real_,
+        
+        scale =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  scale_chr <-
+    
+    if (
+      
+      stringr::str_detect(
+        text_lower_chr,
+        "million"
+      )
+      
+    ) {
+      
+      "million"
+      
+    } else {
+      
+      NA_character_
+      
+    }
+  
+  dollar_chr <-
+    
+    stringr::str_extract(
+      
+      text_chr,
+      
+      "[-−]?\\$\\s*[0-9,]+(?:\\.[0-9]+)?"
+      
+    )
+  
+  if (
+    !is.na(dollar_chr)
+  ) {
+    
+    value_chr <-
+      
+      stringr::str_remove_all(
+        dollar_chr,
+        "\\$|,"
+      )
+    
+    value_chr <-
+      
+      chartr(
+        "−",
+        "-",
+        value_chr
+      )
+    
+    return(
+      
+      list(
+        
+        status =
+          "Numeric",
+        
+        value =
+          
+          suppressWarnings(
+            as.numeric(
+              value_chr
+            )
+          ),
+        
+        scale =
+          scale_chr
+        
+      )
+      
+    )
+    
+  }
+  
+  number_chr <-
+    
+    stringr::str_extract(
+      
+      text_chr,
+      
+      "[-−]?[0-9,]+(?:\\.[0-9]+)?"
+      
+    )
+  
+  if (
+    !is.na(number_chr)
+  ) {
+    
+    number_chr <-
+      
+      stringr::str_remove_all(
+        number_chr,
+        ","
+      )
+    
+    number_chr <-
+      
+      chartr(
+        "−",
+        "-",
+        number_chr
+      )
+    
+    return(
+      
+      list(
+        
+        status =
+          "Numeric",
+        
+        value =
+          
+          suppressWarnings(
+            as.numeric(
+              number_chr
+            )
+          ),
+        
+        scale =
+          scale_chr
+        
+      )
+      
+    )
+    
+  }
+  
+  list(
+    
+    status =
+      "Unknown",
+    
+    value =
+      NA_real_,
+    
+    scale =
+      scale_chr
+    
+  )
+  
+}
+get_without_horizon_prefix <- function(
+    text_chr,
+    horizon_chr
+) {
+  
+  sub(
+    
+    paste0(
+      "^",
+      horizon_chr,
+      "\\s*:\\s*"
+    ),
+    
+    "",
+    
+    text_chr,
+    
+    ignore.case = TRUE
+    
+  )
+  
+}
+get_without_horizon_suffix <- function(
+    text_chr,
+    horizon_chr
+) {
+  
+    sub(
+      
+      paste0(
+        "\\s*\\(",
+        horizon_chr,
+        "\\)"
+      ),
+      
+      "",
+      
+      text_chr,
+      
+      ignore.case = TRUE
+      
+    )
+  
+}
 get_nested_patterns <- function(
     patterns_chr
 ) {
@@ -339,6 +1244,356 @@ get_perspective_blocks <- function(
   )
   
 }
+get_prefix_text <- function(
+    text_chr
+) {
+  
+  prefix_chr <-
+    
+    stringr::str_extract(
+      
+      text_chr,
+      
+      "^[^:]+:"
+      
+    )
+  
+  if (
+    is.na(
+      prefix_chr
+    )
+  ) {
+    
+    return(
+      NA_character_
+    )
+    
+  }
+  
+  stringr::str_squish(
+    prefix_chr
+  )
+  
+}
+get_result_status <- function(
+    text_chr,
+    result_status_patterns_ls,
+    numeric_patterns_chr
+) {
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      "Unknown"
+    )
+    
+  }
+  
+  text_chr <-
+    
+    stringr::str_squish(
+      text_chr
+    )
+  
+  text_lower_chr <-
+    
+    stringr::str_to_lower(
+      text_chr
+    )
+  
+  for (
+    status_chr in names(
+      result_status_patterns_ls
+    )
+  ) {
+    
+    patterns_chr <-
+      
+      result_status_patterns_ls[[status_chr]]
+    
+    pattern_regex_chr <-
+      
+      paste(
+        patterns_chr,
+        collapse = "|"
+      )
+    
+    if (
+      
+      stringr::str_detect(
+        
+        text_lower_chr,
+        
+        stringr::regex(
+          pattern_regex_chr,
+          ignore_case = TRUE
+        )
+        
+      )
+      
+    ) {
+      
+      return(
+        status_chr
+      )
+      
+    }
+    
+  }
+  
+  for (
+    pattern_chr in
+    numeric_patterns_chr
+  ) {
+    
+    if (
+      
+      stringr::str_detect(
+        text_chr,
+        pattern_chr
+      )
+      
+    ) {
+      
+      return(
+        "Numeric"
+      )
+      
+    }
+    
+  }
+  
+  "Unknown"
+  
+}
+get_statistic_blocks <- function(
+    text_chr,
+    statistic_patterns_ls,
+    keep_unmatched_rows_lgl = TRUE
+) {
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        Statistic_Type =
+          NA_character_,
+        
+        Statistic_Text =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  matches_tb <- purrr::imap_dfr(
+    
+    statistic_patterns_ls,
+    
+    function(
+    patterns_chr,
+    statistic_chr
+    ) {
+      
+      purrr::map_dfr(
+        
+        patterns_chr,
+        
+        function(pattern_chr) {
+          
+          locs_mtx <-
+            
+            stringr::str_locate_all(
+              
+              string =
+                stringr::str_to_lower(
+                  text_chr
+                ),
+              
+              pattern =
+                stringr::fixed(
+                  stringr::str_to_lower(
+                    pattern_chr
+                  )
+                )
+              
+            )[[1]]
+          
+          if (
+            nrow(
+              locs_mtx
+            ) == 0
+          ) {
+            
+            return(
+              tibble::tibble()
+            )
+            
+          }
+          
+          tibble::tibble(
+            
+            Statistic_Type =
+              statistic_chr,
+            
+            pattern_chr =
+              pattern_chr,
+            
+            start_int =
+              locs_mtx[, 1],
+            
+            end_int =
+              locs_mtx[, 2]
+            
+          )
+          
+        }
+        
+      )
+      
+    }
+    
+  )
+  
+  if (
+    nrow(matches_tb) == 0
+  ) {
+    
+    if (
+      keep_unmatched_rows_lgl
+    ) {
+      
+      return(
+        
+        tibble::tibble(
+          
+          Statistic_Type =
+            NA_character_,
+          
+          Statistic_Text =
+            
+            stringr::str_squish(
+              text_chr
+            )
+          
+        )
+        
+      )
+      
+    }
+    
+    return(
+      tibble::tibble()
+    )
+    
+  }
+  
+  matches_tb <-
+    
+    matches_tb %>%
+    
+    dplyr::mutate(
+      
+      match_width =
+        end_int - start_int
+      
+    ) %>%
+    
+    dplyr::group_by(
+      start_int
+    ) %>%
+    
+    dplyr::slice_max(
+      
+      match_width,
+      
+      n = 1,
+      
+      with_ties = FALSE
+      
+    ) %>%
+    
+    dplyr::ungroup() %>%
+    
+    dplyr::arrange(
+      start_int
+    )
+  
+  out_ls <- vector(
+    "list",
+    nrow(matches_tb)
+  )
+  
+  for (
+    i in seq_len(
+      nrow(matches_tb)
+    )
+  ) {
+    
+    start_pos <-
+      
+      matches_tb$end_int[i] + 1
+    
+    end_pos <-
+      
+      if (
+        i < nrow(matches_tb)
+      ) {
+        
+        matches_tb$start_int[
+          i + 1
+        ] - 1
+        
+      } else {
+        
+        nchar(
+          text_chr
+        )
+        
+      }
+    
+    out_ls[[i]] <-
+      
+      tibble::tibble(
+        
+        Statistic_Type =
+          
+          matches_tb$
+          Statistic_Type[i],
+        
+        Statistic_Text =
+          
+          stringr::str_squish(
+            
+            substr(
+              
+              text_chr,
+              
+              start_pos,
+              
+              end_pos
+              
+            )
+            
+          )
+        
+      )
+    
+  }
+  
+  dplyr::bind_rows(
+    out_ls
+  )
+  
+}
 get_study_perspective_blocks <- function(
     perspective_chr,
     perspective_normalization_ls
@@ -467,6 +1722,350 @@ get_study_perspective_blocks <- function(
   )
   
 }
+get_temporal_results <- function(
+    text_chr,
+    horizon_patterns_ls) {
+  
+  if (
+    is.na(text_chr)
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        Time_Horizon =
+          NA_character_,
+        
+        Temporal_Result_Text =
+          NA_character_
+        
+      )
+      
+    )
+    
+  }
+  
+  text_chr <-
+    
+    stringr::str_squish(
+      text_chr
+    )
+  
+  # =========================================================
+  # GRAMMAR A
+  # estimate followed by horizon
+  # $45,005 (1-year); $2,711 (31-year)
+  # =========================================================
+  
+  estimate_before_hits <-
+    
+    stringr::str_match_all(
+      
+      text_chr,
+      
+      "\\$[^;]+?\\(([^\\)]+)\\)"
+      
+    )[[1]]
+  
+  all_horizon_patterns_chr <-
+    
+    unique(
+      
+      unlist(
+        
+        horizon_patterns_ls,
+        
+        use.names = FALSE
+        
+      )
+      
+    )
+  
+  if (
+    nrow(
+      estimate_before_hits
+    ) > 0
+  ) {
+    
+    keep_idx_lgl <-
+      
+      purrr::map_lgl(
+        
+        estimate_before_hits[, 2],
+        
+        function(label_chr) {
+          
+          any(
+            
+            stringr::str_detect(
+              
+              stringr::str_to_lower(
+                label_chr
+              ),
+              
+              stringr::regex(
+                
+                paste(
+                  all_horizon_patterns_chr,
+                  collapse = "|"
+                ),
+                
+                ignore_case = TRUE
+                
+              )
+              
+            )
+            
+          )
+          
+        }
+        
+      )
+    
+    estimate_before_hits <-
+      
+      estimate_before_hits[
+        keep_idx_lgl,
+        ,
+        drop = FALSE
+      ]
+    
+  }
+  
+  if (
+    nrow(
+      estimate_before_hits
+    ) > 1
+  ) {
+    
+    out_ls <-
+      
+      purrr::map(
+        
+        seq_len(
+          nrow(
+            estimate_before_hits
+          )
+        ),
+        
+        function(i) {
+          
+          estimate_chr <-
+            
+            stringr::str_trim(
+              
+              estimate_before_hits[
+                i,
+                1
+              ]
+              
+            )
+          
+          horizon_chr <-
+            
+            stringr::str_trim(
+              
+              estimate_before_hits[
+                i,
+                2
+              ]
+              
+            )
+          
+          estimate_chr <-
+            
+            get_without_horizon_suffix(estimate_chr,
+                                       horizon_chr = horizon_chr)
+          
+          tibble::tibble(
+            
+            Time_Horizon =
+              horizon_chr,
+            
+            Temporal_Result_Text =
+              get_clean_temporal_segment(estimate_chr)
+            
+          )
+          
+        }
+        
+      )
+    
+    return(
+      
+      dplyr::bind_rows(
+        out_ls
+      )
+      
+    )
+    
+  }
+  
+  # =========================================================
+  # GRAMMAR B
+  # horizon followed by estimate
+  # 6mth: $1,272 ... 1yr: $2,788 ...
+  # =========================================================
+  
+  all_patterns_chr <-
+    
+    unique(
+      
+      unlist(
+        
+        horizon_patterns_ls,
+        
+        use.names = FALSE
+        
+      )
+      
+    )
+  
+  horizon_regex_chr <-
+    
+    paste(
+      
+      stringr::str_replace_all(
+        all_patterns_chr,
+        "([\\-])",
+        "\\\\\\1"
+      ),
+      
+      collapse = "|"
+      
+    )
+  
+  matches_mat <-
+    
+    stringr::str_locate_all(
+      
+      stringr::str_to_lower(
+        text_chr
+      ),
+      
+      stringr::regex(
+        horizon_regex_chr,
+        ignore_case = TRUE
+      )
+      
+    )[[1]]
+  
+  if (
+    nrow(
+      matches_mat
+    ) <= 1
+  ) {
+    
+    return(
+      
+      tibble::tibble(
+        
+        Time_Horizon =
+          NA_character_,
+        
+        Temporal_Result_Text =
+          get_clean_temporal_segment(text_chr)
+        
+      )
+      
+    )
+    
+  }
+  
+  out_ls <- vector(
+    "list",
+    nrow(matches_mat)
+  )
+  
+  for (
+    i in seq_len(
+      nrow(matches_mat)
+    )
+  ) {
+    
+    start_pos <-
+      
+      matches_mat[
+        i,
+        "start"
+      ]
+    
+    end_pos <-
+      
+      if (
+        i <
+        nrow(matches_mat)
+      ) {
+        
+        matches_mat[
+          i + 1,
+          "start"
+        ] - 1
+        
+      } else {
+        
+        nchar(
+          text_chr
+        )
+        
+      }
+    
+    segment_chr <-
+      
+      substr(
+        
+        text_chr,
+        
+        start_pos,
+        
+        end_pos
+        
+      )
+    
+    horizon_chr <-
+      
+      stringr::str_extract(
+        
+        segment_chr,
+        
+        stringr::regex(
+          horizon_regex_chr,
+          ignore_case = TRUE
+        )
+        
+      )
+    
+    segment_chr <-
+      
+      get_without_horizon_prefix(
+        segment_chr,
+        horizon_chr
+      )
+    
+    out_ls[[i]] <-
+      
+      tibble::tibble(
+        
+        Time_Horizon =
+          horizon_chr,
+        
+        Temporal_Result_Text =
+          
+          get_clean_temporal_segment(
+            segment_chr
+          )
+        
+      )
+    
+  }
+  
+  dplyr::bind_rows(
+    out_ls
+  )
+  
+}
+
 get_variant_segment <- function(
     text_chr,
     category_chr,
@@ -870,6 +2469,8 @@ make_split_cases <- function(x) {
   )
   
 }
+
+
 transform_to_clean_text <- function(
     .data,
     source_col,
@@ -1204,405 +2805,7 @@ transform_to_expand_categorical_results <- function(
     )
   
 }
-# transform_to_expand_ce_perspectives <- function(
-#     .data,
-#     source_col,
-#     variants_ls,
-#     perspective_col = "Perspective",
-#     perspective_text_col = "CE_Perspective_Text",
-#     original_text_col = NULL,
-#     matched_pattern_col = NULL) {
-#   
-#   source_col <- rlang::ensym(
-#     source_col
-#   )
-#   
-#   perspective_col <- rlang::sym(
-#     perspective_col
-#   )
-#   
-#   perspective_text_col <- rlang::sym(
-#     perspective_text_col
-#   )
-#   
-#   if (!is.null(
-#     original_text_col
-#   )) {
-#     
-#     original_text_col <- rlang::sym(
-#       original_text_col
-#     )
-#     
-#   }
-#   
-#   if (!is.null(
-#     matched_pattern_col
-#   )) {
-#     
-#     matched_pattern_col <- rlang::sym(
-#       matched_pattern_col
-#     )
-#     
-#   }
-#   
-#   get_perspective_blocks <- function(
-#     text_chr,
-#     variants_ls) {
-#     
-#     if (is.na(text_chr)) {
-#       
-#       return(
-#         
-#         tibble::tibble(
-#           
-#           perspective_chr =
-#             NA_character_,
-#           
-#           matched_pattern_chr =
-#             NA_character_,
-#           
-#           perspective_text_chr =
-#             NA_character_
-#           
-#         )
-#         
-#       )
-#       
-#     }
-#     
-#     matches_tb <- purrr::imap_dfr(
-#       
-#       variants_ls,
-#       
-#       function(
-#     patterns_chr,
-#     perspective_chr
-#       ) {
-#         
-#         purrr::map_dfr(
-#           
-#           patterns_chr,
-#           
-#           function(pattern_chr) {
-#             
-#             locs_mtx <-
-#               stringr::str_locate_all(
-#                 
-#                 string =
-#                   stringr::str_to_lower(
-#                     text_chr
-#                   ),
-#                 
-#                 pattern =
-#                   stringr::fixed(
-#                     stringr::str_to_lower(
-#                       pattern_chr
-#                     )
-#                   )
-#                 
-#               )[[1]]
-#             
-#             if (
-#               nrow(
-#                 locs_mtx
-#               ) == 0
-#             ) {
-#               
-#               return(
-#                 
-#                 tibble::tibble(
-#                   
-#                   perspective_chr =
-#                     character(),
-#                   
-#                   matched_pattern_chr =
-#                     character(),
-#                   
-#                   start_int =
-#                     integer(),
-#                   
-#                   end_int =
-#                     integer()
-#                   
-#                 )
-#                 
-#               )
-#               
-#             }
-#             
-#             tibble::tibble(
-#               
-#               perspective_chr =
-#                 perspective_chr,
-#               
-#               matched_pattern_chr =
-#                 pattern_chr,
-#               
-#               start_int =
-#                 locs_mtx[, 1],
-#               
-#               end_int =
-#                 locs_mtx[, 2]
-#               
-#             )
-#             
-#           }
-#           
-#         )
-#         
-#       }
-#     
-#     )
-#     
-#     if (
-#       nrow(
-#         matches_tb
-#       ) == 0
-#     ) {
-#       
-#       return(
-#         
-#         tibble::tibble(
-#           
-#           perspective_chr =
-#             NA_character_,
-#           
-#           matched_pattern_chr =
-#             NA_character_,
-#           
-#           perspective_text_chr =
-#             stringr::str_squish(
-#               text_chr
-#             )
-#           
-#         )
-#         
-#       )
-#       
-#     }
-#     
-#     matches_tb <- matches_tb %>%
-#       
-#       dplyr::mutate(
-#         
-#         match_length_int =
-#           end_int -
-#           start_int +
-#           1
-#         
-#       ) %>%
-#       
-#       dplyr::group_by(
-#         start_int
-#       ) %>%
-#       
-#       dplyr::slice_max(
-#         
-#         order_by =
-#           match_length_int,
-#         
-#         n = 1,
-#         
-#         with_ties = FALSE
-#         
-#       ) %>%
-#       
-#       dplyr::ungroup() %>%
-#       
-#       dplyr::select(
-#         -match_length_int
-#       ) %>%
-#       
-#       dplyr::arrange(
-#         start_int
-#       )
-#     
-#     outp_ls <- vector(
-#       
-#       mode = "list",
-#       
-#       length =
-#         nrow(
-#           matches_tb
-#         )
-#       
-#     )
-#     
-#     for (i in seq_len(
-#       nrow(matches_tb)
-#     )) {
-#       
-#       block_start_int <-
-#         matches_tb$end_int[
-#           i
-#         ] + 1
-#       
-#       if (
-#         
-#         i <
-#         nrow(
-#           matches_tb
-#         )
-#         
-#       ) {
-#         
-#         block_end_int <-
-#           
-#           matches_tb$start_int[
-#             i + 1
-#           ] - 1
-#         
-#       } else {
-#         
-#         block_end_int <-
-#           
-#           nchar(
-#             text_chr
-#           )
-#         
-#       }
-#       
-#       outp_ls[[i]] <-
-#         
-#         tibble::tibble(
-#           
-#           perspective_chr =
-#             
-#             matches_tb$
-#             perspective_chr[
-#               i
-#             ],
-#           
-#           matched_pattern_chr =
-#             
-#             matches_tb$
-#             matched_pattern_chr[
-#               i
-#             ],
-#           
-#           perspective_text_chr =
-#             
-#             stringr::str_squish(
-#               
-#               substr(
-#                 
-#                 text_chr,
-#                 
-#                 block_start_int,
-#                 
-#                 block_end_int
-#                 
-#               )
-#               
-#             )
-#           
-#         )
-#       
-#     }
-#     
-#     dplyr::bind_rows(
-#       outp_ls
-#     )
-#     
-#   }
-#   
-#   outp_tb <- .data %>%
-#     
-#     dplyr::mutate(
-#       
-#       .original_text_chr =
-#         
-#         as.character(
-#           !!source_col
-#         )
-#       
-#     ) %>%
-#     
-#     dplyr::rowwise() %>%
-#     
-#     dplyr::mutate(
-#       
-#       .perspectives_ls = list(
-#         
-#         get_perspective_blocks(
-#           
-#           text_chr =
-#             
-#             as.character(
-#               !!source_col
-#             ),
-#           
-#           variants_ls =
-#             variants_ls
-#           
-#         )
-#         
-#       )
-#       
-#     ) %>%
-#     
-#     dplyr::ungroup() %>%
-#     
-#     tidyr::unnest(
-#       .perspectives_ls
-#     ) %>%
-#     
-#     dplyr::mutate(
-#       
-#       !!perspective_col :=
-#         perspective_chr,
-#       
-#       !!perspective_text_col :=
-#         perspective_text_chr
-#       
-#     )
-#   
-#   if (!is.null(
-#     matched_pattern_col
-#   )) {
-#     
-#     outp_tb <- outp_tb %>%
-#       
-#       dplyr::mutate(
-#         
-#         !!matched_pattern_col :=
-#           matched_pattern_chr
-#         
-#       )
-#     
-#   }
-#   
-#   if (!is.null(
-#     original_text_col
-#   )) {
-#     
-#     outp_tb <- outp_tb %>%
-#       
-#       dplyr::mutate(
-#         
-#         !!original_text_col :=
-#           .original_text_chr
-#         
-#       )
-#     
-#   }
-#   
-#   outp_tb %>%
-#     
-#     dplyr::select(
-#       
-#       -tidyselect::any_of(
-#         c(
-#           "perspective_chr",
-#           "matched_pattern_chr",
-#           "perspective_text_chr",
-#           ".original_text_chr"
-#         )
-#       )
-#       
-#     )
-#   
-# }
+
 transform_to_expand_ce_statistics <- function(
     .data,
     source_col,
@@ -1634,222 +2837,7 @@ transform_to_expand_ce_statistics <- function(
     
   }
   
-  extract_statistics <- function(
-    text_chr) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        
-        tibble::tibble(
-          
-          statistic_type_chr =
-            NA_character_,
-          
-          statistic_text_chr =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    matches_tb <- purrr::imap_dfr(
-      
-      statistic_patterns_ls,
-      
-      function(
-    patterns_chr,
-    statistic_chr
-      ) {
-        
-        purrr::map_dfr(
-          
-          patterns_chr,
-          
-          function(pattern_chr) {
-            
-            locs_mtx <-
-              
-              stringr::str_locate_all(
-                
-                string =
-                  stringr::str_to_lower(
-                    text_chr
-                  ),
-                
-                pattern =
-                  stringr::fixed(
-                    stringr::str_to_lower(
-                      pattern_chr
-                    )
-                  )
-                
-              )[[1]]
-            
-            if (
-              nrow(
-                locs_mtx
-              ) == 0
-            ) {
-              
-              return(
-                tibble::tibble()
-              )
-              
-            }
-            
-            tibble::tibble(
-              
-              statistic_type_chr =
-                statistic_chr,
-              
-              pattern_chr =
-                pattern_chr,
-              
-              start_int =
-                locs_mtx[,1],
-              
-              end_int =
-                locs_mtx[,2]
-              
-            )
-            
-          }
-          
-        )
-        
-      }
-    
-    )
-    
-    if (
-      nrow(matches_tb) == 0
-    ) {
-      
-      if (
-        keep_unmatched_rows_lgl
-      ) {
-        
-        return(
-          
-          tibble::tibble(
-            
-            statistic_type_chr =
-              NA_character_,
-            
-            statistic_text_chr =
-              stringr::str_squish(
-                text_chr
-              )
-            
-          )
-          
-        )
-        
-      }
-      
-      return(
-        tibble::tibble()
-      )
-      
-    }
-    
-    matches_tb <- matches_tb %>%
-      
-      dplyr::mutate(
-        
-        match_width =
-          end_int -
-          start_int
-        
-      ) %>%
-      
-      dplyr::group_by(
-        start_int
-      ) %>%
-      
-      dplyr::slice_max(
-        match_width,
-        n = 1,
-        with_ties = FALSE
-      ) %>%
-      
-      dplyr::ungroup() %>%
-      
-      dplyr::arrange(
-        start_int
-      )
-    
-    out_ls <- vector(
-      "list",
-      nrow(matches_tb)
-    )
-    
-    for (
-      i in seq_len(
-        nrow(matches_tb)
-      )
-    ) {
-      
-      start_pos <-
-        matches_tb$end_int[i] + 1
-      
-      end_pos <-
-        
-        if (
-          i < nrow(matches_tb)
-        ) {
-          
-          matches_tb$start_int[
-            i + 1
-          ] - 1
-          
-        } else {
-          
-          nchar(
-            text_chr
-          )
-          
-        }
-      
-      out_ls[[i]] <-
-        
-        tibble::tibble(
-          
-          statistic_type_chr =
-            
-            matches_tb$
-            statistic_type_chr[i],
-          
-          statistic_text_chr =
-            
-            stringr::str_squish(
-              
-              substr(
-                
-                text_chr,
-                
-                start_pos,
-                
-                end_pos
-                
-              )
-              
-            )
-          
-        )
-      
-    }
-    
-    dplyr::bind_rows(
-      out_ls
-    )
-    
-  }
+
   
   outp_tb <- .data %>%
     
@@ -1867,17 +2855,27 @@ transform_to_expand_ce_statistics <- function(
     
     dplyr::mutate(
       
-      .stats_ls = list(
+      .stats_ls =
         
-        extract_statistics(
+        list(
           
-          as.character(
-            !!source_col
+          get_statistic_blocks(
+            
+            text_chr =
+              
+              as.character(
+                !!source_col
+              ),
+            
+            statistic_patterns_ls =
+              statistic_patterns_ls,
+            
+            keep_unmatched_rows_lgl =
+              keep_unmatched_rows_lgl
+            
           )
           
         )
-        
-      )
       
     ) %>%
     
@@ -1887,13 +2885,13 @@ transform_to_expand_ce_statistics <- function(
       .stats_ls
     ) %>%
     
-    dplyr::mutate(
+    dplyr::rename(
       
       !!statistic_col :=
-        statistic_type_chr,
+        Statistic_Type,
       
       !!statistic_text_col :=
-        statistic_text_chr
+        Statistic_Text
       
     )
   
@@ -1920,9 +2918,7 @@ transform_to_expand_ce_statistics <- function(
       -tidyselect::any_of(
         
         c(
-          ".original_text_chr",
-          "statistic_type_chr",
-          "statistic_text_chr"
+          ".original_text_chr"
         )
         
       )
@@ -3155,7 +4151,7 @@ transform_to_expand_temporal_results <- function(
       
       Temporal_Result_Text =
         
-        stringr::str_squish(
+        get_clean_temporal_segment(
           Temporal_Result_Text
         )
       
@@ -3965,138 +4961,7 @@ transform_to_extract_ci_text <- function(
     upper_col
   )
   
-  extract_ci <- function(
-    text_chr) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        
-        list(
-          
-          lower =
-            NA_character_,
-          
-          upper =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    ci_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        stringr::regex(
-          
-          "\\((95\\s*%?\\s*(CI|UI).*?)\\)",
-          
-          ignore_case = TRUE
-          
-        )
-        
-      )
-    
-    if (
-      is.na(ci_chr)
-    ) {
-      
-      return(
-        
-        list(
-          
-          lower =
-            NA_character_,
-          
-          upper =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    ci_chr <-
-      
-      stringr::str_remove_all(
-        ci_chr,
-        "^\\(|\\)$"
-      )
-    
-    ci_chr <-
-      
-      stringr::str_remove(
-        
-        ci_chr,
-        
-        stringr::regex(
-          "^95\\s*%?\\s*(CI|UI)\\s*:?\\s*",
-          ignore_case = TRUE
-        )
-        
-      )
-    
-    bounds_chr <-
-      
-      stringr::str_split(
-        
-        ci_chr,
-        
-        stringr::regex(
-          "\\s+to\\s+",
-          ignore_case = TRUE
-        )
-        
-      )[[1]]
-    
-    if (
-      length(
-        bounds_chr
-      ) != 2
-    ) {
-      
-      return(
-        
-        list(
-          
-          lower =
-            NA_character_,
-          
-          upper =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    list(
-      
-      lower =
-        
-        stringr::str_squish(
-          bounds_chr[1]
-        ),
-      
-      upper =
-        
-        stringr::str_squish(
-          bounds_chr[2]
-        )
-      
-    )
-    
-  }
-  
+
   ci_ls <-
     
     purrr::map(
@@ -4106,7 +4971,7 @@ transform_to_extract_ci_text <- function(
         !!source_col
       ),
       
-      extract_ci
+      get_confidence_interval
       
     )
   
@@ -4145,242 +5010,6 @@ transform_to_extract_ci_values <- function(
     upper_text_col
   )
   
-  classify_ci <- function(
-    text_chr) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        list(
-          status = NA_character_,
-          value = NA_real_,
-          scale = NA_character_
-        )
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_squish(
-        text_chr
-      )
-    
-    text_lower_chr <-
-      
-      stringr::str_to_lower(
-        text_chr
-      )
-    
-    if (
-      
-      stringr::str_detect(
-        text_lower_chr,
-        "\\bdominated\\b"
-      )
-      
-    ) {
-      
-      return(
-        
-        list(
-          
-          status =
-            "Dominated",
-          
-          value =
-            NA_real_,
-          
-          scale =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    if (
-      
-      stringr::str_detect(
-        text_lower_chr,
-        "\\bdominant\\b"
-      )
-      
-    ) {
-      
-      return(
-        
-        list(
-          
-          status =
-            "Dominant",
-          
-          value =
-            NA_real_,
-          
-          scale =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    scale_chr <-
-      
-      if (
-        
-        stringr::str_detect(
-          
-          text_lower_chr,
-          
-          "million"
-          
-        )
-        
-      ) {
-        
-        "million"
-        
-      } else {
-        
-        NA_character_
-        
-      }
-    
-    dollar_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        "[-−]?\\$\\s*[0-9,]+(?:\\.[0-9]+)?"
-        
-      )
-    
-    if (
-      
-      !is.na(
-        dollar_chr
-      )
-      
-    ) {
-      
-      value_chr <-
-        
-        stringr::str_remove_all(
-          dollar_chr,
-          "\\$|,"
-        )
-      
-      value_chr <-
-        
-        chartr(
-          "−",
-          "-",
-          value_chr
-        )
-      
-      return(
-        
-        list(
-          
-          status =
-            "Numeric",
-          
-          value =
-            
-            suppressWarnings(
-              as.numeric(
-                value_chr
-              )
-            ),
-          
-          scale =
-            scale_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    number_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        "[-−]?[0-9,]+(?:\\.[0-9]+)?"
-        
-      )
-    
-    if (
-      
-      !is.na(
-        number_chr
-      )
-      
-    ) {
-      
-      number_chr <-
-        
-        stringr::str_remove_all(
-          number_chr,
-          ","
-        )
-      
-      number_chr <-
-        
-        chartr(
-          "−",
-          "-",
-          number_chr
-        )
-      
-      return(
-        
-        list(
-          
-          status =
-            "Numeric",
-          
-          value =
-            
-            suppressWarnings(
-              as.numeric(
-                number_chr
-              )
-            ),
-          
-          scale =
-            scale_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    list(
-      
-      status =
-        "Unknown",
-      
-      value =
-        NA_real_,
-      
-      scale =
-        scale_chr
-      
-    )
-    
-  }
-  
   lower_ls <-
     
     purrr::map(
@@ -4390,7 +5019,7 @@ transform_to_extract_ci_values <- function(
         !!lower_text_col
       ),
       
-      classify_ci
+      get_numeric_result
       
     )
   
@@ -4403,7 +5032,7 @@ transform_to_extract_ci_values <- function(
         !!upper_text_col
       ),
       
-      classify_ci
+      get_numeric_result
       
     )
   
@@ -4461,594 +5090,23 @@ transform_to_extract_dimension_text <- function(
     .data,
     source_col,
     dimension_col = "Result_Dimension",
-    output_col = "Dimension_Specific_Text") {
+    output_col = "Dimension_Specific_Text"
+) {
   
-  source_col <- rlang::ensym(
-    source_col
-  )
-  
-  dimension_col <- rlang::sym(
-    dimension_col
-  )
-  
-  output_col <- rlang::sym(
-    output_col
-  )
-  
-  extract_prefix <- function(
-    text_chr) {
-    
-    prefix_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        "^[^:]+:"
-        
-      )
-    
-    if (
-      is.na(
-        prefix_chr
-      )
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    stringr::str_squish(
-      prefix_chr
+  source_col <-
+    rlang::ensym(
+      source_col
     )
-    
-  }
   
-  prepend_prefix <- function(
-    extracted_chr,
-    prefix_chr) {
-    
-    if (
-      is.na(extracted_chr) ||
-      extracted_chr == ""
-    ) {
-      
-      return(
-        extracted_chr
-      )
-      
-    }
-    
-    if (
-      is.na(prefix_chr)
-    ) {
-      
-      return(
-        extracted_chr
-      )
-      
-    }
-    
-    if (
-      
-      stringr::str_starts(
-        
-        extracted_chr,
-        
-        stringr::fixed(
-          prefix_chr
-        )
-        
-      )
-      
-    ) {
-      
-      return(
-        extracted_chr
-      )
-      
-    }
-    
-    stringr::str_squish(
-      
-      paste(
-        prefix_chr,
-        extracted_chr
-      )
-      
+  dimension_col <-
+    rlang::ensym(
+      dimension_col
     )
-    
-  }
   
-  extract_and_clause <- function(
-    text_chr,
-    dimension_chr) {
-    
-    if (
-      
-      !stringr::str_detect(
-        
-        text_chr,
-        
-        stringr::regex(
-          "\\sand\\s",
-          ignore_case = TRUE
-        )
-        
-      )
-      
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    clauses_chr <-
-      
-      stringr::str_split(
-        
-        text_chr,
-        
-        stringr::regex(
-          "\\sand\\s",
-          ignore_case = TRUE
-        )
-        
-      )[[1]]
-    
-    if (
-      dimension_chr == "QALY"
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "QALY",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else if (
-      
-      dimension_chr == "DALY"
-      
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "DALY",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else if (
-      
-      dimension_chr == "PSP"
-      
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "PSP",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else if (
-      
-      dimension_chr == "RELAPSE"
-      
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "relapse",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else if (
-      
-      dimension_chr == "MDE_DAY"
-      
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "MDE day",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else if (
-      
-      dimension_chr == "K10"
-      
-    ) {
-      
-      matches_dimension_lgl <-
-        
-        stringr::str_detect(
-          
-          clauses_chr,
-          
-          stringr::regex(
-            "K10",
-            ignore_case = TRUE
-          )
-          
-        )
-      
-    } else {
-      
-      matches_dimension_lgl <-
-        
-        rep(
-          FALSE,
-          length(
-            clauses_chr
-          )
-        )
-      
-    }
-    
-    hit_chr <-
-      
-      clauses_chr[
-        matches_dimension_lgl
-      ]
-    
-    if (
-      length(
-        hit_chr
-      ) == 0
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    stringr::str_squish(
-      hit_chr[1]
+  output_col <-
+    rlang::ensym(
+      output_col
     )
-    
-  }
-  
-  extract_dimension_text <- function(
-    statistic_text_chr,
-    dimension_chr) {
-    
-    if (
-      is.na(statistic_text_chr) ||
-      is.na(dimension_chr)
-    ) {
-      
-      return(
-        statistic_text_chr
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_squish(
-        statistic_text_chr
-      )
-    
-    prefix_chr <-
-      
-      extract_prefix(
-        text_chr
-      )
-    
-    and_hit_chr <-
-      
-      extract_and_clause(
-        
-        text_chr =
-          text_chr,
-        
-        dimension_chr =
-          dimension_chr
-        
-      )
-    
-    if (
-      
-      !is.na(
-        and_hit_chr
-      )
-      
-    ) {
-      
-      return(
-        
-        prepend_prefix(
-          
-          extracted_chr =
-            and_hit_chr,
-          
-          prefix_chr =
-            prefix_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    if (
-      dimension_chr == "QALY"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*QALY[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    if (
-      dimension_chr == "DALY"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*DALY[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    if (
-      dimension_chr == "PSP"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*PSP[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    if (
-      dimension_chr == "RELAPSE"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*relapse[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    if (
-      dimension_chr == "MDE_DAY"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*MDE day[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    if (
-      dimension_chr == "K10"
-    ) {
-      
-      hit_chr <-
-        
-        stringr::str_extract(
-          
-          text_chr,
-          
-          "[^;&]*K10[^;&]*"
-          
-        )
-      
-      if (
-        !is.na(hit_chr)
-      ) {
-        
-        return(
-          
-          prepend_prefix(
-            
-            extracted_chr =
-              
-              stringr::str_squish(
-                hit_chr
-              ),
-            
-            prefix_chr =
-              prefix_chr
-            
-          )
-          
-        )
-        
-      }
-      
-    }
-    
-    text_chr
-    
-  }
   
   .data %>%
     
@@ -5058,7 +5116,7 @@ transform_to_extract_dimension_text <- function(
       
       !!output_col :=
         
-        extract_dimension_text(
+        get_dimension_text(
           
           statistic_text_chr =
             
@@ -5187,104 +5245,6 @@ transform_to_extract_result_dimensions <- function(
     output_col
   )
   
-  detect_dimensions <- function(
-    text_chr,
-    result_dimension_patterns_ls) {
-    
-    if (
-      is.na(text_chr) ||
-      text_chr == ""
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_to_lower(
-        text_chr
-      )
-    
-    detected_chr <- character()
-    
-    for (
-      
-      dimension_chr in
-      names(
-        result_dimension_patterns_ls
-      )
-      
-    ) {
-      
-      matched_lgl <-
-        
-        purrr::some(
-          
-          result_dimension_patterns_ls[[dimension_chr]],
-          
-          function(
-    pattern_chr
-          ) {
-            
-            stringr::str_detect(
-              
-              text_chr,
-              
-              stringr::fixed(
-                stringr::str_to_lower(
-                  pattern_chr
-                )
-              )
-              
-            )
-            
-          }
-    
-        )
-      
-      if (
-        matched_lgl
-      ) {
-        
-        detected_chr <-
-          
-          c(
-            detected_chr,
-            dimension_chr
-          )
-        
-      }
-      
-    }
-    
-    detected_chr <-
-      
-      unique(
-        detected_chr
-      )
-    
-    if (
-      length(
-        detected_chr
-      ) == 0
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    paste(
-      detected_chr,
-      collapse = "; "
-    )
-    
-  }
-  
   source_cols_chr <-
     
     vapply(
@@ -5319,7 +5279,7 @@ transform_to_extract_result_dimensions <- function(
       
       !!output_col :=
         
-        detect_dimensions(
+        get_detected_dimensions(
           
           text_chr =
             .all_text_chr,
@@ -5372,111 +5332,7 @@ transform_to_extract_result_status <- function(
     output_col
   )
   
-  classify_status <- function(
-    text_chr,
-    result_status_patterns_ls,
-    numeric_patterns_chr) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        "Unknown"
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_squish(
-        text_chr
-      )
-    
-    text_lower_chr <-
-      
-      stringr::str_to_lower(
-        text_chr
-      )
-    
-    # ----------------------------------
-    # configured status patterns
-    # ----------------------------------
-    
-    for (
-      status_chr in names(
-        result_status_patterns_ls
-      )
-    ) {
-      
-      patterns_chr <-
-        
-        result_status_patterns_ls[[status_chr]]
-      
-      pattern_regex_chr <-
-        
-        paste(
-          patterns_chr,
-          collapse = "|"
-        )
-      
-      if (
-        
-        stringr::str_detect(
-          
-          text_lower_chr,
-          
-          stringr::regex(
-            pattern_regex_chr,
-            ignore_case = TRUE
-          )
-          
-        )
-        
-      ) {
-        
-        return(
-          status_chr
-        )
-        
-      }
-      
-    }
-    
-    # ----------------------------------
-    # numeric detection
-    # ----------------------------------
-    
-    for (
-      pattern_chr in
-      numeric_patterns_chr
-    ) {
-      
-      if (
-        
-        stringr::str_detect(
-          text_chr,
-          pattern_chr
-        )
-        
-      ) {
-        
-        return(
-          "Numeric"
-        )
-        
-      }
-      
-    }
-    
-    # ----------------------------------
-    # default
-    # ----------------------------------
-    
-    "Unknown"
-    
-  }
-  
+
   .data %>%
     
     dplyr::mutate(
@@ -5487,12 +5343,16 @@ transform_to_extract_result_status <- function(
           
           !!source_col,
           
-          ~ classify_status(
+          ~ get_result_status(
+            
             text_chr = .x,
+            
             result_status_patterns_ls =
               result_status_patterns_ls,
+            
             numeric_patterns_chr =
               numeric_patterns_chr
+            
           )
           
         )
@@ -5505,7 +5365,8 @@ transform_to_extract_result_value <- function(
     source_col,
     status_col = "Result_Status",
     output_col = "Result_Value",
-    scale_col = "Result_Value_Scale") {
+    scale_col = "Result_Value_Scale"
+) {
   
   source_col <- rlang::ensym(
     source_col
@@ -5523,189 +5384,16 @@ transform_to_extract_result_value <- function(
     scale_col
   )
   
-  extract_value <- function(
-    text_chr,
-    status_chr) {
-    
-    if (
-      is.na(text_chr) ||
-      is.na(status_chr)
-    ) {
-      
-      return(
-        list(
-          value = NA_real_,
-          scale = NA_character_
-        )
-      )
-      
-    }
-    
-    if (
-      status_chr != "Numeric"
-    ) {
-      
-      return(
-        list(
-          value = NA_real_,
-          scale = NA_character_
-        )
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_squish(
-        text_chr
-      )
-    
-    scale_chr <-
-      
-      if (
-        
-        stringr::str_detect(
-          
-          text_chr,
-          
-          stringr::regex(
-            "million",
-            ignore_case = TRUE
-          )
-          
-        )
-        
-      ) {
-        
-        "million"
-        
-      } else {
-        
-        NA_character_
-        
-      }
-    
-    dollar_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        "[-−]?\\$\\s*[0-9,]+(?:\\.[0-9]+)?"
-        
-      )
-    
-    if (
-      
-      !is.na(
-        dollar_chr
-      )
-      
-    ) {
-      
-      value_chr <-
-        
-        stringr::str_remove_all(
-          dollar_chr,
-          "\\$|,"
-        )
-      
-      value_chr <-
-        
-        chartr(
-          "−",
-          "-",
-          value_chr
-        )
-      
-      return(
-        
-        list(
-          
-          value =
-            
-            suppressWarnings(
-              as.numeric(
-                value_chr
-              )
-            ),
-          
-          scale =
-            scale_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    number_chr <-
-      
-      stringr::str_extract(
-        
-        text_chr,
-        
-        "[-−]?[0-9]+(?:\\.[0-9]+)?"
-        
-      )
-    
-    if (
-      is.na(number_chr)
-    ) {
-      
-      return(
-        
-        list(
-          
-          value = NA_real_,
-          scale = scale_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    number_chr <-
-      
-      chartr(
-        "−",
-        "-",
-        number_chr
-      )
-    
-    list(
-      
-      value =
-        
-        suppressWarnings(
-          as.numeric(
-            number_chr
-          )
-        ),
-      
-      scale =
-        scale_chr
-      
-    )
-    
-  }
-  
   values_ls <-
     
-    purrr::map2(
+    purrr::map(
       
       dplyr::pull(
         .data,
         !!source_col
       ),
       
-      dplyr::pull(
-        .data,
-        !!status_col
-      ),
-      
-      extract_value
+      get_numeric_result
       
     )
   
@@ -5730,6 +5418,7 @@ transform_to_extract_result_value <- function(
     )
   
 }
+
 transform_to_extract_split_segment <- function(
     .data,
     split_pattern_col,
@@ -5961,369 +5650,7 @@ transform_to_extract_temporal_results <- function(
     source_col
   )
   
-  extract_temporal_results <- function(
-    text_chr,
-    horizon_patterns_ls) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        
-        tibble::tibble(
-          
-          Time_Horizon =
-            NA_character_,
-          
-          Temporal_Result_Text =
-            NA_character_
-          
-        )
-        
-      )
-      
-    }
-    
-    text_chr <-
-      
-      stringr::str_squish(
-        text_chr
-      )
-    
-    # =========================================================
-    # GRAMMAR A
-    # estimate followed by horizon
-    # $45,005 (1-year); $2,711 (31-year)
-    # =========================================================
-    
-    estimate_before_hits <-
-      
-      stringr::str_match_all(
-        
-        text_chr,
-        
-        "\\$[^;]+?\\(([^\\)]+)\\)"
-        
-      )[[1]]
-    
-    all_horizon_patterns_chr <-
-      
-      unique(
-        
-        unlist(
-          
-          horizon_patterns_ls,
-          
-          use.names = FALSE
-          
-        )
-        
-      )
-    
-    if (
-      nrow(
-        estimate_before_hits
-      ) > 0
-    ) {
-      
-      keep_idx_lgl <-
-        
-        purrr::map_lgl(
-          
-          estimate_before_hits[, 2],
-          
-          function(label_chr) {
-            
-            any(
-              
-              stringr::str_detect(
-                
-                stringr::str_to_lower(
-                  label_chr
-                ),
-                
-                stringr::regex(
-                  
-                  paste(
-                    all_horizon_patterns_chr,
-                    collapse = "|"
-                  ),
-                  
-                  ignore_case = TRUE
-                  
-                )
-                
-              )
-              
-            )
-            
-          }
-          
-        )
-      
-      estimate_before_hits <-
-        
-        estimate_before_hits[
-          keep_idx_lgl,
-          ,
-          drop = FALSE
-        ]
-      
-    }
-    
-    if (
-      nrow(
-        estimate_before_hits
-      ) > 1
-    ) {
-      
-      out_ls <-
-        
-        purrr::map(
-          
-          seq_len(
-            nrow(
-              estimate_before_hits
-            )
-          ),
-          
-          function(i) {
-            
-            estimate_chr <-
-              
-              stringr::str_trim(
-                
-                estimate_before_hits[
-                  i,
-                  1
-                ]
-                
-              )
-            
-            horizon_chr <-
-              
-              stringr::str_trim(
-                
-                estimate_before_hits[
-                  i,
-                  2
-                ]
-                
-              )
-            
-            estimate_chr <-
-              
-              stringr::str_remove(
-                
-                estimate_chr,
-                
-                paste0(
-                  "\\s*\\(",
-                  stringr::fixed(
-                    horizon_chr
-                  ),
-                  "\\)"
-                )
-                
-              )
-            
-            tibble::tibble(
-              
-              Time_Horizon =
-                horizon_chr,
-              
-              Temporal_Result_Text =
-                estimate_chr
-              
-            )
-            
-          }
-          
-        )
-      
-      return(
-        
-        dplyr::bind_rows(
-          out_ls
-        )
-        
-      )
-      
-    }
-    
-    # =========================================================
-    # GRAMMAR B
-    # horizon followed by estimate
-    # 6mth: $1,272 ... 1yr: $2,788 ...
-    # =========================================================
-    
-    all_patterns_chr <-
-      
-      unique(
-        
-        unlist(
-          
-          horizon_patterns_ls,
-          
-          use.names = FALSE
-          
-        )
-        
-      )
-    
-    horizon_regex_chr <-
-      
-      paste(
-        
-        stringr::str_replace_all(
-          all_patterns_chr,
-          "([\\-])",
-          "\\\\\\1"
-        ),
-        
-        collapse = "|"
-        
-      )
-    
-    matches_mat <-
-      
-      stringr::str_locate_all(
-        
-        stringr::str_to_lower(
-          text_chr
-        ),
-        
-        stringr::regex(
-          horizon_regex_chr,
-          ignore_case = TRUE
-        )
-        
-      )[[1]]
-    
-    if (
-      nrow(
-        matches_mat
-      ) <= 1
-    ) {
-      
-      return(
-        
-        tibble::tibble(
-          
-          Time_Horizon =
-            NA_character_,
-          
-          Temporal_Result_Text =
-            text_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    out_ls <- vector(
-      "list",
-      nrow(matches_mat)
-    )
-    
-    for (
-      i in seq_len(
-        nrow(matches_mat)
-      )
-    ) {
-      
-      start_pos <-
-        
-        matches_mat[
-          i,
-          "start"
-        ]
-      
-      end_pos <-
-        
-        if (
-          i <
-          nrow(matches_mat)
-        ) {
-          
-          matches_mat[
-            i + 1,
-            "start"
-          ] - 1
-          
-        } else {
-          
-          nchar(
-            text_chr
-          )
-          
-        }
-      
-      segment_chr <-
-        
-        substr(
-          
-          text_chr,
-          
-          start_pos,
-          
-          end_pos
-          
-        )
-      
-      horizon_chr <-
-        
-        stringr::str_extract(
-          
-          segment_chr,
-          
-          stringr::regex(
-            horizon_regex_chr,
-            ignore_case = TRUE
-          )
-          
-        )
-      
-      segment_chr <-
-        
-        stringr::str_remove(
-          
-          segment_chr,
-          
-          paste0(
-            "^",
-            stringr::fixed(
-              horizon_chr
-            ),
-            "\\s*:\\s*"
-          )
-          
-        )
-      
-      out_ls[[i]] <-
-        
-        tibble::tibble(
-          
-          Time_Horizon =
-            horizon_chr,
-          
-          Temporal_Result_Text =
-            
-            stringr::str_squish(
-              segment_chr
-            )
-          
-        )
-      
-    }
-    
-    dplyr::bind_rows(
-      out_ls
-    )
-    
-  }
+
   
   .data %>%
     
@@ -6335,9 +5662,9 @@ transform_to_extract_temporal_results <- function(
           
           !!source_col,
           
-          ~ extract_temporal_results(
+          ~ get_temporal_results(
             .x,
-            horizon_patterns_ls
+            horizon_patterns_ls = horizon_patterns_ls
           )
           
         )
@@ -6345,205 +5672,7 @@ transform_to_extract_temporal_results <- function(
     )
   
 }
-transform_to_extract_temporal_segments <- function(
-    .data,
-    source_col,
-    horizon_patterns_ls) {
-  
-  source_col <- rlang::ensym(
-    source_col
-  )
-  
-  all_patterns_chr <-
-    
-    unique(
-      
-      unlist(
-        horizon_patterns_ls,
-        use.names = FALSE
-      )
-      
-    )
-  
-  extract_segments <- function(
-    text_chr,
-    patterns_chr) {
-    
-    if (
-      is.na(text_chr)
-    ) {
-      
-      return(
-        tibble::tibble(
-          Time_Horizon = NA_character_,
-          Temporal_Result_Text = NA_character_
-        )
-      )
-      
-    }
-    
-    matches_tb <-
-      
-      purrr::map_dfr(
-        
-        patterns_chr,
-        
-        function(pattern_chr) {
-          
-          loc_mat <-
-            
-            stringr::str_locate_all(
-              
-              stringr::str_to_lower(
-                text_chr
-              ),
-              
-              stringr::fixed(
-                stringr::str_to_lower(
-                  pattern_chr
-                )
-              )
-              
-            )[[1]]
-          
-          if (
-            nrow(loc_mat) == 0
-          ) {
-            
-            return(NULL)
-            
-          }
-          
-          tibble::tibble(
-            
-            Horizon_Label =
-              pattern_chr,
-            
-            Start =
-              loc_mat[, "start"]
-            
-          )
-          
-        }
-        
-      )
-    
-    if (
-      nrow(matches_tb) <= 1
-    ) {
-      
-      return(
-        
-        tibble::tibble(
-          
-          Time_Horizon =
-            
-            if (
-              nrow(matches_tb) == 1
-            ) {
-              
-              matches_tb$Horizon_Label
-              
-            } else {
-              
-              NA_character_
-              
-            },
-          
-          Temporal_Result_Text =
-            text_chr
-          
-        )
-        
-      )
-      
-    }
-    
-    matches_tb <-
-      
-      matches_tb %>%
-      
-      dplyr::arrange(
-        Start
-      )
-    
-    purrr::map_dfr(
-      
-      seq_len(
-        nrow(matches_tb)
-      ),
-      
-      function(i) {
-        
-        start_pos <-
-          
-          matches_tb$Start[i]
-        
-        end_pos <-
-          
-          if (
-            
-            i <
-            nrow(matches_tb)
-            
-          ) {
-            
-            matches_tb$Start[i + 1] - 1
-            
-          } else {
-            
-            nchar(
-              text_chr
-            )
-            
-          }
-        
-        tibble::tibble(
-          
-          Time_Horizon =
-            
-            matches_tb$Horizon_Label[i],
-          
-          Temporal_Result_Text =
-            
-            stringr::str_squish(
-              
-              substr(
-                text_chr,
-                start_pos,
-                end_pos
-              )
-              
-            )
-          
-        )
-        
-      }
-      
-    )
-    
-  }
-  
-  .data %>%
-    
-    dplyr::mutate(
-      
-      Temporal_Segments =
-        
-        purrr::map(
-          
-          !!source_col,
-          
-          ~ extract_segments(
-            .x,
-            all_patterns_chr
-          )
-          
-        )
-      
-    )
-  
-}
+
 transform_to_extract_trailing_text <- function(
     .data,
     source_col,
@@ -7067,7 +6196,8 @@ transform_to_flag_complex_results <- function(
         "high distress",
         "low distress"
       )
-    )) {
+    )
+) {
   
   result_dimensions_col <-
     rlang::ensym(
@@ -7129,22 +6259,28 @@ transform_to_flag_complex_results <- function(
       
       Has_Multiple_Horizons =
         
-        stringr::str_count(
+        dplyr::coalesce(
           
-          stringr::str_to_lower(
+          stringr::str_count(
             
-            as.character(
-              !!dimension_text_col
+            stringr::str_to_lower(
+              
+              as.character(
+                !!dimension_text_col
+              )
+              
+            ),
+            
+            stringr::regex(
+              horizon_regex_chr,
+              ignore_case = TRUE
             )
             
-          ),
+          ) > 1,
           
-          stringr::regex(
-            horizon_regex_chr,
-            ignore_case = TRUE
-          )
+          FALSE
           
-        ) > 1,
+        ),
       
       Needs_Horizon_Expansion =
         
@@ -7152,22 +6288,28 @@ transform_to_flag_complex_results <- function(
       
       Needs_Subgroup_Expansion =
         
-        stringr::str_count(
+        dplyr::coalesce(
           
-          stringr::str_to_lower(
+          stringr::str_count(
             
-            as.character(
-              !!dimension_text_col
+            stringr::str_to_lower(
+              
+              as.character(
+                !!dimension_text_col
+              )
+              
+            ),
+            
+            stringr::regex(
+              subgroup_regex_chr,
+              ignore_case = TRUE
             )
             
-          ),
+          ) > 1,
           
-          stringr::regex(
-            subgroup_regex_chr,
-            ignore_case = TRUE
-          )
+          FALSE
           
-        ) > 1
+        )
       
     )
   
@@ -7181,63 +6323,7 @@ transform_to_normalize_time_horizons <- function(
     source_col
   )
   
-  normalize_horizon <- function(
-    value_chr,
-    horizon_patterns_ls) {
-    
-    if (
-      is.na(value_chr)
-    ) {
-      
-      return(
-        NA_character_
-      )
-      
-    }
-    
-    value_std_chr <-
-      
-      stringr::str_to_lower(
-        stringr::str_squish(
-          value_chr
-        )
-      )
-    
-    for (
-      canonical_chr in names(
-        horizon_patterns_ls
-      )
-    ) {
-      
-      variants_chr <-
-        
-        stringr::str_to_lower(
-          
-          stringr::str_squish(
-            
-            horizon_patterns_ls[[canonical_chr]]
-            
-          )
-          
-        )
-      
-      if (
-        value_std_chr %in%
-        variants_chr
-      ) {
-        
-        return(
-          canonical_chr
-        )
-        
-      }
-      
-    }
-    
-    value_chr
-    
-  }
-  
+
   .data %>%
     
     dplyr::mutate(
@@ -7248,7 +6334,7 @@ transform_to_normalize_time_horizons <- function(
           
           !!source_col,
           
-          ~ normalize_horizon(
+          ~ get_normalized_horizon(
             .x,
             horizon_patterns_ls
           )
@@ -7494,6 +6580,7 @@ transform_to_permissible_values <- function(.data,
   outp_tb
   
 }
+
 transform_to_split_cases <- function(.data,
                                      col,
                                      split_pattern_col = NULL) {
@@ -7606,6 +6693,28 @@ update_to_normalized_list <- function(
   )
   
 }
+validate_logical_flags <- function(
+    x,
+    flag_name_chr
+) {
+  
+  if (
+    any(
+      is.na(x)
+    )
+  ) {
+    
+    stop(
+      paste(
+        flag_name_chr,
+        "contains NA values."
+      ),
+      call. = FALSE
+    )
+    
+  }
+  
+}
 validate_pattern_list <- function(
     patterns_ls
 ) {
@@ -7633,6 +6742,50 @@ validate_pattern_list <- function(
         )
       
     }
+    
+  )
+  
+}
+validate_pipeline_regression <- function(
+    final_normalized_tb,
+    target_counts_int = c(132L,2L),
+    target_papers_chr = c("511")
+) {
+  
+  stopifnot(
+    
+    nrow(
+      final_normalized_tb
+    ) == target_counts_int[1]
+    
+  )
+  
+  stopifnot(
+    
+    sum(
+      is.na(
+        final_normalized_tb$
+          Statistic_Type
+      )
+    ) == target_counts_int[2]
+    
+  )
+  
+  stopifnot(
+    
+    all(
+      
+      final_normalized_tb %>%
+        
+        dplyr::filter(
+          Paper_id %in% target_papers_chr
+        ) %>%
+        
+        dplyr::pull(
+          Final_Result_Status
+        ) == "Dominant"
+      
+    )
     
   )
   
